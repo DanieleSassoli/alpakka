@@ -69,11 +69,11 @@ lazy val alpakka = project
     // unidoc combines sources and jars from all connectors and that
     // might include some incompatible ones. Depending on the
     // classpath order that might lead to scaladoc compilation errors.
-    // Therefore some versions are exlcuded here.
+    // Therefore some versions are excluded here.
     ScalaUnidoc / unidoc / fullClasspath := {
       (ScalaUnidoc / unidoc / fullClasspath).value
         .filterNot(_.data.getAbsolutePath.contains("protobuf-java-2.5.0.jar"))
-        .filterNot(_.data.getAbsolutePath.contains("guava-27.1-android.jar"))
+        .filterNot(_.data.getAbsolutePath.contains("guava-28.1-android.jar"))
         .filterNot(_.data.getAbsolutePath.contains("commons-net-3.1.jar"))
     },
     ScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(`doc-examples`,
@@ -166,12 +166,15 @@ lazy val googleCloudPubSubGrpc = alpakkaProject(
   akkaGrpcCodeGeneratorSettings ~= { _.filterNot(_ == "flat_package") },
   akkaGrpcGeneratedSources := Seq(AkkaGrpc.Client),
   akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Scala, AkkaGrpc.Java),
-  javaAgents += Dependencies.GooglePubSubGrpcAlpnAgent % "test",
+  javaAgents += Dependencies.GooglePubSubGrpcAlpnAgent % Test,
   // for the ExampleApp in the tests
   connectInput in run := true,
-  Compile / compile / scalacOptions += "-P:silencer:pathFilters=src_managed",
+  scalacOptions += "-P:silencer:pathFilters=src_managed",
   crossScalaVersions --= Seq(Dependencies.Scala211) // 2.11 is not supported since Akka gRPC 0.6
-).enablePlugins(AkkaGrpcPlugin, JavaAgent)
+)
+// #grpc-plugins
+  .enablePlugins(AkkaGrpcPlugin, JavaAgent)
+// #grpc-plugins
 
 lazy val googleCloudStorage =
   alpakkaProject("google-cloud-storage",
@@ -286,7 +289,7 @@ lazy val docs = project
   .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .disablePlugins(BintrayPlugin, MimaPlugin)
   .settings(
-    name := "Alpakka",
+    Compile / paradox / name := "Alpakka",
     publish / skip := true,
     whitesourceIgnore := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
@@ -305,6 +308,7 @@ lazy val docs = project
         "extref.akka-http.base_url" -> s"https://doc.akka.io/docs/akka-http/${Dependencies.AkkaHttpBinaryVersion}/%s",
         "scaladoc.akka.http.base_url" -> s"https://doc.akka.io/api/akka-http/${Dependencies.AkkaHttpBinaryVersion}/",
         "javadoc.akka.http.base_url" -> s"https://doc.akka.io/japi/akka-http/${Dependencies.AkkaHttpBinaryVersion}/",
+        "extref.akka-grpc.base_url" -> s"https://doc.akka.io/docs/akka-grpc/current/%s",
         "extref.couchbase.base_url" -> s"https://docs.couchbase.com/java-sdk/${Dependencies.CouchbaseVersionForDocs}/%s",
         "extref.java-api.base_url" -> "https://docs.oracle.com/javase/8/docs/api/index.html?%s.html",
         "extref.geode.base_url" -> s"https://geode.apache.org/docs/guide/${Dependencies.GeodeVersionForDocs}/%s",
@@ -320,7 +324,6 @@ lazy val docs = project
         "javadoc.com.couchbase.base_url" -> s"https://docs.couchbase.com/sdk-api/couchbase-java-client-${Dependencies.CouchbaseVersion}/",
         "javadoc.org.apache.kudu.base_url" -> s"https://kudu.apache.org/releases/${Dependencies.KuduVersion}/apidocs/",
         "javadoc.org.apache.hadoop.base_url" -> s"https://hadoop.apache.org/docs/r${Dependencies.HadoopVersion}/api/",
-        "javadoc.com.amazonaws.base_url" -> "https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/",
         "javadoc.software.amazon.awssdk.base_url" -> "https://sdk.amazonaws.com/java/api/latest/",
         // Eclipse Paho client for MQTT
         "javadoc.org.eclipse.paho.client.mqttv3.base_url" -> "https://www.eclipse.org/paho/files/javadoc/",
@@ -330,6 +333,11 @@ lazy val docs = project
         "javadoc.akka.stream.alpakka.base_url" -> ""
       ),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
+    paradoxRoots := List("examples/elasticsearch-samples.html",
+                         "examples/ftp-samples.html",
+                         "examples/jms-samples.html",
+                         "examples/mqtt-samples.html",
+                         "index.html"),
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifact := makeSite.value -> "www/",
     publishRsyncHost := "akkarepo@gustav.akka.io",
@@ -347,11 +355,6 @@ lazy val whitesourceSupported = project
 lazy val `doc-examples` = project
   .enablePlugins(AutomateHeaderPlugin)
   .disablePlugins(BintrayPlugin, MimaPlugin, SitePlugin)
-  .dependsOn(
-    files,
-    ftp,
-    mqtt
-  )
   .settings(
     name := s"akka-stream-alpakka-doc-examples",
     publish / skip := true,

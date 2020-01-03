@@ -10,13 +10,13 @@ object Dependencies {
   val Scala213 = "2.13.1"
   val ScalaVersions = Seq(Scala212, Scala211, Scala213).filterNot(_ == Scala211 && Nightly)
 
-  val AkkaVersion = if (Nightly) "2.6.0-RC1" else "2.5.26"
+  val AkkaVersion = if (Nightly) "2.6.0" else "2.5.26"
   val AkkaBinaryVersion = if (Nightly) "2.6" else "2.5"
 
   val InfluxDBJavaVersion = "2.15"
 
   val AwsSdkVersion = "1.11.476"
-  val AwsSdk2Version = "2.7.18"
+  val AwsSdk2Version = "2.10.34"
   val AwsSpiAkkaHttpVersion = "0.0.7"
   val AkkaHttpVersion = "10.1.10"
   val AkkaHttpBinaryVersion = "10.1"
@@ -73,7 +73,16 @@ object Dependencies {
 
   val AwsLambda = Seq(
     libraryDependencies ++= Seq(
-        "software.amazon.awssdk" % "lambda" % AwsSdk2Version, // ApacheV2
+        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion, // ApacheV2
+        "com.github.matsluni" %% "aws-spi-akka-http" % AwsSpiAkkaHttpVersion excludeAll // ApacheV2
+        (
+          ExclusionRule(organization = "com.typesafe.akka")
+        ),
+        "software.amazon.awssdk" % "lambda" % AwsSdk2Version excludeAll // ApacheV2
+        (
+          ExclusionRule("software.amazon.awssdk", "apache-client"),
+          ExclusionRule("software.amazon.awssdk", "netty-nio-client")
+        ),
         "org.mockito" % "mockito-core" % mockitoVersion % Test // MIT
       ) ++ JacksonDatabindDependencies
   )
@@ -102,25 +111,9 @@ object Dependencies {
 
   val `Doc-examples` = Seq(
     libraryDependencies ++= Seq(
-        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-        // https://mina.apache.org/ftpserver-project/downloads.html
-        "org.apache.ftpserver" % "ftpserver-core" % "1.1.1", // ApacheV2
-        "org.apache.sshd" % "sshd-scp" % "2.1.0", // ApacheV2
-        "org.apache.sshd" % "sshd-sftp" % "2.1.0", // ApacheV2
-        "com.google.jimfs" % "jimfs" % "1.1", // ApacheV2
         "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http-xml" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-        // https://github.com/akka/alpakka-kafka/releases
-        "com.typesafe.akka" %% "akka-stream-kafka" % "1.0.5",
-        "io.netty" % "netty-all" % "4.1.29.Final", // ApacheV2
-        "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % JacksonDatabindVersion,
-        "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % JacksonDatabindVersion,
-        "org.apache.logging.log4j" % "log4j-to-slf4j" % "2.11.2", // ApacheV2
-        "org.slf4j" % "log4j-over-slf4j" % log4jOverSlf4jVersion,
-        "org.slf4j" % "jcl-over-slf4j" % jclOverSlf4jVersion,
-        "ch.qos.logback" % "logback-classic" % "1.2.3" // Eclipse Public License 1.0
-      ) ++ JacksonDatabindDependencies
+        "com.typesafe.akka" %% "akka-stream-kafka" % "1.1.0"
+      )
   )
 
   val DynamoDB = Seq(
@@ -194,10 +187,12 @@ object Dependencies {
   )
 
   val GooglePubSubGrpc = Seq(
+    // see Akka gRPC version in plugins.sbt
     libraryDependencies ++= Seq(
-        "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "1.68.0" % "protobuf", // ApacheV2
-        "io.grpc" % "grpc-auth" % "1.22.1", // ApacheV2
-        "com.google.auth" % "google-auth-library-oauth2-http" % "0.16.2", // BSD 3-clause
+        // https://github.com/googleapis/java-pubsub/tree/master/proto-google-cloud-pubsub-v1/
+        "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "1.84.0" % "protobuf", // ApacheV2
+        "io.grpc" % "grpc-auth" % "1.25.0", // ApacheV2
+        "com.google.auth" % "google-auth-library-oauth2-http" % "0.19.0", // BSD 3-clause
         // pull in Akka Discovery for our Akka version
         "com.typesafe.akka" %% "akka-discovery" % AkkaVersion
       ) ++ Silencer
@@ -285,6 +280,11 @@ object Dependencies {
 
   val Kinesis = Seq(
     libraryDependencies ++= Seq(
+        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion, // ApacheV2
+        "com.github.matsluni" %% "aws-spi-akka-http" % AwsSpiAkkaHttpVersion excludeAll // ApacheV2
+        (
+          ExclusionRule(organization = "com.typesafe.akka")
+        ),
         "software.amazon.awssdk" % "kinesis" % AwsSdk2Version excludeAll // ApacheV2
         (
           ExclusionRule("software.amazon.awssdk", "apache-client"),
@@ -296,7 +296,7 @@ object Dependencies {
           ExclusionRule("software.amazon.awssdk", "netty-nio-client")
         ),
         "org.mockito" % "mockito-core" % mockitoVersion % Test // MIT
-      )
+      ) ++ JacksonDatabindDependencies
   )
 
   val KuduVersion = "1.7.1"
