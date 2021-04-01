@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -8,10 +8,9 @@ import akka.Done;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
 import akka.stream.alpakka.hbase.HTableSettings;
 import akka.stream.alpakka.hbase.javadsl.HTableStage;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Keep;
 import akka.stream.javadsl.Sink;
@@ -22,6 +21,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.UnsupportedEncodingException;
@@ -37,14 +37,13 @@ import java.util.function.Function;
 import static org.junit.Assert.assertEquals;
 
 public class HBaseStageTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   private static ActorSystem system;
-  private static Materializer materializer;
 
   @BeforeClass
   public static void setup() {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
   }
 
   @AfterClass
@@ -158,7 +157,7 @@ public class HBaseStageTest {
     CompletionStage<Done> o =
         Source.from(Arrays.asList(100, 101, 102, 103, 104))
             .map((i) -> new Person(i, String.format("name %d", i)))
-            .runWith(sink, materializer);
+            .runWith(sink, system);
     // #sink
 
     assertEquals(Done.getInstance(), o.toCompletableFuture().get(5, TimeUnit.SECONDS));
@@ -181,7 +180,7 @@ public class HBaseStageTest {
             .map((i) -> new Person(i, String.format("name_%d", i)))
             .via(flow)
             .toMat(Sink.seq(), Keep.both())
-            .run(materializer);
+            .run(system);
     // #flow
 
     assertEquals(5, run.second().toCompletableFuture().get().size());
@@ -201,14 +200,14 @@ public class HBaseStageTest {
 
     final Sink<Person, CompletionStage<Done>> sink = HTableStage.sink(tableSettings);
     CompletionStage<Done> o =
-        Source.from(Arrays.asList(new Person(300, "name 300"))).runWith(sink, materializer);
+        Source.from(Arrays.asList(new Person(300, "name 300"))).runWith(sink, system);
     assertEquals(Done.getInstance(), o.toCompletableFuture().get(5, TimeUnit.SECONDS));
 
     // #source
     Scan scan = new Scan(new Get("id_300".getBytes("UTF-8")));
 
     CompletionStage<List<Result>> f =
-        HTableStage.source(scan, tableSettings).runWith(Sink.seq(), materializer);
+        HTableStage.source(scan, tableSettings).runWith(Sink.seq(), system);
     // #source
 
     assertEquals(1, f.toCompletableFuture().get().size());

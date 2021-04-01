@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.impl
@@ -114,7 +114,7 @@ import scala.concurrent.Promise
 
   override def onFailure(ex: Throwable): Unit = {
     streamCompletion.tryFailure(ex)
-    onFailure(ex)
+    super.onFailure(ex)
   }
 
   def dequeueAwaitingMessages(tag: DeliveryTag, multiple: Boolean): Iterable[AwaitingMessage[T]]

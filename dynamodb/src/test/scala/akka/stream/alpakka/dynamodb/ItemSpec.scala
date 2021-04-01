@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.dynamodb
@@ -7,13 +7,14 @@ package akka.stream.alpakka.dynamodb
 import java.net.URI
 
 import akka.actor.ActorSystem
-import akka.stream._
 import akka.stream.alpakka.dynamodb.scaladsl._
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.testkit.TestKit
 import com.github.matsluni.akkahttpspi.AkkaHttpClient
 import org.scalatest._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AsyncWordSpecLike
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
@@ -24,7 +25,6 @@ import scala.concurrent.ExecutionContext
 
 class ItemSpec extends TestKit(ActorSystem("ItemSpec")) with AsyncWordSpecLike with Matchers with BeforeAndAfterAll {
 
-  implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val ec: ExecutionContext = system.dispatcher
 
   implicit val client: DynamoDbAsyncClient = DynamoDbAsyncClient

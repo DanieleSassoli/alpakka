@@ -1,13 +1,14 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.s3
 
 import java.util.{Objects, Optional}
 
-import akka.http.scaladsl.model.{DateTime, HttpHeader, Uri}
+import akka.http.scaladsl.model.{DateTime, HttpHeader, IllegalUriException, Uri}
 import akka.http.scaladsl.model.headers._
+import akka.stream.alpakka.s3.AccessStyle.PathAccessStyle
 
 import scala.collection.immutable.Seq
 import scala.collection.immutable
@@ -382,7 +383,7 @@ final class ObjectMetadata private (
    * Amazon S3.
    * </p>
    * <p>
-   * For more information on the Content-Length HTTP header, see [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
+   * For more information on the Content-Length HTTP header, see [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
    * </p>
    *
    * @return The Content-Length HTTP header indicating the size of the
@@ -413,7 +414,7 @@ final class ObjectMetadata private (
    * </p>
    * <p>
    * For more information on the Content-Length HTTP header, see
-   * [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
+   * [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
    * </p>
    *
    * @return The Content-Length HTTP header indicating the size of the
@@ -439,7 +440,7 @@ final class ObjectMetadata private (
    * </p>
    * <p>
    * For more information on the Content-Type header, see
-   * [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
+   * [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
    * </p>
    *
    * @return The HTTP Content-Type header, indicating the type of content
@@ -468,7 +469,7 @@ final class ObjectMetadata private (
    * </p>
    * <p>
    * For more information on the Content-Type header, see
-   * [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
+   * [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
    * </p>
    *
    * @return The HTTP Content-Type header, indicating the type of content
@@ -551,7 +552,7 @@ object ObjectMetadata {
  *
  * @see https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketHEAD.html
  */
-sealed class BucketAccess
+sealed trait BucketAccess
 
 object BucketAccess {
   case object AccessDenied extends BucketAccess
@@ -561,4 +562,53 @@ object BucketAccess {
   val accessDenied: BucketAccess = AccessDenied
   val accessGranted: BucketAccess = AccessGranted
   val notExists: BucketAccess = NotExists
+}
+
+/**
+ * https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+ * https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+ */
+object BucketAndKey {
+  private val bucketRegexPathStyle = "(/\\.\\.)|(\\.\\./)".r
+  private val bucketRegexDns = "[^a-z0-9\\-\\.]{1,255}|[\\.]{2,}".r
+
+  def pathStyleValid(bucket: String) = {
+    bucketRegexPathStyle.findFirstIn(bucket).isEmpty && ".." != bucket
+  }
+
+  def dnsValid(bucket: String) = {
+    bucketRegexDns.findFirstIn(bucket).isEmpty
+  }
+
+  private[s3] def validateBucketName(bucket: String, conf: S3Settings): Unit = {
+    if (conf.accessStyle == PathAccessStyle) {
+      if (!pathStyleValid(bucket)) {
+        throw IllegalUriException(
+          "The bucket name contains sub-dir selection with `..`",
+          "Selecting sub-directories with `..` is forbidden (and won't work with non-path-style access)."
+        )
+      }
+    } else {
+      bucketRegexDns.findFirstIn(bucket) match {
+        case Some(illegalCharacter) =>
+          throw IllegalUriException(
+            "Bucket name contains non-LDH characters",
+            s"The following character is not allowed: $illegalCharacter"
+          )
+        case None => ()
+      }
+    }
+  }
+
+  def objectKeyValid(key: String): Boolean = !key.split("/").contains("..")
+
+  private[s3] def validateObjectKey(key: String, conf: S3Settings): Unit = {
+    if (conf.validateObjectKey && !objectKeyValid(key))
+      throw IllegalUriException(
+        "The object key contains sub-dir selection with `..`",
+        "Selecting sub-directories with `..` is forbidden (see the `validate-object-key` setting)."
+      )
+
+  }
+
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -9,21 +9,21 @@ import akka.NotUsed;
 import akka.actor.Cancellable;
 
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 
 // #publish-single
 import akka.stream.alpakka.googlecloud.pubsub.grpc.PubSubSettings;
 import akka.stream.alpakka.googlecloud.pubsub.grpc.javadsl.GooglePubSub;
 import akka.stream.alpakka.googlecloud.pubsub.grpc.javadsl.GrpcPublisher;
 import akka.stream.alpakka.googlecloud.pubsub.grpc.javadsl.PubSubAttributes;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.*;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.*;
 
 // #publish-single
 
-import akka.stream.Materializer;
 import org.junit.AfterClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -38,9 +38,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class IntegrationTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   static final ActorSystem system = ActorSystem.create("IntegrationTest");
-  static final Materializer materializer = ActorMaterializer.create(system);
 
   @Test
   public void shouldPublishAMessage()
@@ -63,7 +63,7 @@ public class IntegrationTest {
     final Flow<PublishRequest, PublishResponse, NotUsed> publishFlow = GooglePubSub.publish(1);
 
     final CompletionStage<List<PublishResponse>> publishedMessageIds =
-        source.via(publishFlow).runWith(Sink.seq(), materializer);
+        source.via(publishFlow).runWith(Sink.seq(), system);
     // #publish-single
 
     assertTrue(
@@ -92,7 +92,7 @@ public class IntegrationTest {
                         .addAllMessages(messages)
                         .build())
             .via(GooglePubSub.publish(1))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     // #publish-fast
 
     assertTrue(
@@ -101,8 +101,9 @@ public class IntegrationTest {
   }
 
   @Test
-  public void shouldSubscribe() throws InterruptedException, ExecutionException, TimeoutException {
-    // #subscribe
+  public void shouldSubscribeStream()
+      throws InterruptedException, ExecutionException, TimeoutException {
+    // #subscribe-stream
     final String projectId = "alpakka";
     final String subscription = "simpleSubscription";
 
@@ -115,10 +116,9 @@ public class IntegrationTest {
     final Duration pollInterval = Duration.ofSeconds(1);
     final Source<ReceivedMessage, CompletableFuture<Cancellable>> subscriptionSource =
         GooglePubSub.subscribe(request, pollInterval);
-    // #subscribe
+    // #subscribe-stream
 
-    final CompletionStage<ReceivedMessage> first =
-        subscriptionSource.runWith(Sink.head(), materializer);
+    final CompletionStage<ReceivedMessage> first = subscriptionSource.runWith(Sink.head(), system);
 
     final String topic = "simpleTopic";
     final ByteString msg = ByteString.copyFromUtf8("Hello world!");
@@ -131,7 +131,46 @@ public class IntegrationTest {
             .addMessages(publishMessage)
             .build();
 
-    Source.single(publishRequest).via(GooglePubSub.publish(1)).runWith(Sink.ignore(), materializer);
+    Source.single(publishRequest).via(GooglePubSub.publish(1)).runWith(Sink.ignore(), system);
+
+    assertEquals(
+        "received and expected messages not the same",
+        msg,
+        first.toCompletableFuture().get(2, TimeUnit.SECONDS).getMessage().getData());
+  }
+
+  @Test
+  public void shouldSubscribeSync()
+      throws InterruptedException, ExecutionException, TimeoutException {
+    // #subscribe-sync
+    final String projectId = "alpakka";
+    final String subscription = "simpleSubscription";
+
+    final PullRequest request =
+        PullRequest.newBuilder()
+            .setSubscription("projects/" + projectId + "/subscriptions/" + subscription)
+            .setMaxMessages(10)
+            .build();
+
+    final Duration pollInterval = Duration.ofSeconds(1);
+    final Source<ReceivedMessage, CompletableFuture<Cancellable>> subscriptionSource =
+        GooglePubSub.subscribePolling(request, pollInterval);
+    // #subscribe-sync
+
+    final CompletionStage<ReceivedMessage> first = subscriptionSource.runWith(Sink.head(), system);
+
+    final String topic = "simpleTopic";
+    final ByteString msg = ByteString.copyFromUtf8("Hello world!");
+
+    final PubsubMessage publishMessage = PubsubMessage.newBuilder().setData(msg).build();
+
+    final PublishRequest publishRequest =
+        PublishRequest.newBuilder()
+            .setTopic("projects/" + projectId + "/topics/" + topic)
+            .addMessages(publishMessage)
+            .build();
+
+    Source.single(publishRequest).via(GooglePubSub.publish(1)).runWith(Sink.ignore(), system);
 
     assertEquals(
         "received and expected messages not the same",
@@ -173,7 +212,7 @@ public class IntegrationTest {
   public void customPublisher() {
     // #attributes
     final PubSubSettings settings = PubSubSettings.create(system);
-    final GrpcPublisher publisher = GrpcPublisher.create(settings, system, materializer);
+    final GrpcPublisher publisher = GrpcPublisher.create(settings, system);
 
     final Flow<PublishRequest, PublishResponse, NotUsed> publishFlow =
         GooglePubSub.publish(1).withAttributes(PubSubAttributes.publisher(publisher));

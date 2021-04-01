@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,11 +7,10 @@ package docs.javadsl;
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
 import akka.stream.alpakka.kudu.KuduAttributes;
 import akka.stream.alpakka.kudu.KuduTableSettings;
 import akka.stream.alpakka.kudu.javadsl.KuduTable;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Keep;
 import akka.stream.javadsl.Sink;
@@ -26,8 +25,9 @@ import org.apache.kudu.client.KuduException;
 import org.apache.kudu.client.PartialRow;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,8 +38,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 public class KuduTableTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static ActorSystem system;
-  private static Materializer materializer;
   private static Schema schema;
 
   private static KuduTableSettings<Person> tableSettings;
@@ -47,7 +48,6 @@ public class KuduTableTest {
   @BeforeClass
   public static void setup() {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
 
     // #configure
     // Kudu Schema
@@ -91,7 +91,7 @@ public class KuduTableTest {
     CompletionStage<Done> o =
         Source.from(Arrays.asList(100, 101, 102, 103, 104))
             .map((i) -> new Person(i, String.format("name %d", i)))
-            .runWith(sink, materializer);
+            .runWith(sink, system);
     // #sink
     assertEquals(Done.getInstance(), o.toCompletableFuture().get(5, TimeUnit.SECONDS));
   }
@@ -106,7 +106,7 @@ public class KuduTableTest {
             .map((i) -> new Person(i, String.format("name_%d", i)))
             .via(flow)
             .toMat(Sink.seq(), Keep.right())
-            .run(materializer);
+            .run(system);
     // #flow
     assertEquals(5, run.toCompletableFuture().get(5, TimeUnit.SECONDS).size());
   }
@@ -135,7 +135,7 @@ public class KuduTableTest {
             .map((i) -> new Person(i, String.format("name_%d", i)))
             .via(flow)
             .toMat(Sink.seq(), Keep.right())
-            .run(materializer);
+            .run(system);
 
     assertEquals(5, run.toCompletableFuture().get(5, TimeUnit.SECONDS).size());
   }

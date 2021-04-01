@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -9,6 +9,7 @@ package docs.javadsl;
 import akka.stream.alpakka.ftp.javadsl.Ftp;
 // #create-settings
 import akka.stream.IOResult;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Compression;
 import akka.stream.testkit.javadsl.StreamTestKit;
 import akka.util.ByteString;
@@ -29,13 +30,16 @@ import akka.stream.Materializer;
 import akka.testkit.javadsl.TestKit;
 import org.junit.*;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class FtpWritingTest extends BaseFtpSupport {
+
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   @After
   public void afterEach() {

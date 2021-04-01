@@ -1,36 +1,43 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
 import java.io._
 import java.nio.file.{Path, Paths}
-import java.util.zip.ZipInputStream
 
-import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.alpakka.file.ArchiveMetadata
 import akka.stream.alpakka.file.scaladsl.Archive
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{FileIO, Sink, Source}
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.testkit.TestKit
 import akka.util.ByteString
+import akka.NotUsed
 import docs.javadsl.ArchiveHelper
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
-class ArchiveSpec extends WordSpec with Matchers with ScalaFutures {
+class ArchiveSpec
+    extends TestKit(ActorSystem("ArchiveSpec"))
+    with AnyWordSpecLike
+    with Matchers
+    with ScalaFutures
+    with BeforeAndAfterAll
+    with LogCapturing
+    with IntegrationPatience {
 
-  implicit val sys = ActorSystem("ArchiveSpec")
-  implicit val mat: Materializer = ActorMaterializer()
+  implicit val ec: ExecutionContext = system.dispatcher
 
   private val archiveHelper = new ArchiveHelper()
 
   "archive" when {
-
     "zip flow is called" should {
       "pass empty stream" in {
         val sources = Source.empty
@@ -51,14 +58,14 @@ class ArchiveSpec extends WordSpec with Matchers with ScalaFutures {
         val fileStream2: Source[ByteString, Any] = FileIO.fromPath(filePath2)
 
         /*
-         // #sample
-         val fileStream1: Source[ByteString,  Any] = ...
-         val fileStream2: Source[ByteString,  Any] = ...
+        // #sample-zip
+        val fileStream1: Source[ByteString,  Any] = ...
+        val fileStream2: Source[ByteString,  Any] = ...
 
-         // #sample
+        // #sample-zip
          */
 
-        // #sample
+        // #sample-zip
         val filesStream = Source(
           List(
             (ArchiveMetadata("akka_full_color.svg"), fileStream1),
@@ -69,22 +76,29 @@ class ArchiveSpec extends WordSpec with Matchers with ScalaFutures {
         val result = filesStream
           .via(Archive.zip())
           .runWith(FileIO.toPath(Paths.get("result.zip")))
-        // #sample
-        result.futureValue
+        // #sample-zip
+        result.futureValue.count shouldBe 1178
 
-        archiveHelper.createReferenceZipFile(List(filePath1, filePath2).asJava, "reference.zip")
+        val resultFileContent =
+          FileIO.fromPath(Paths.get("result.zip")).runWith(Sink.fold(ByteString.empty)(_ ++ _)).futureValue
 
-        val resultFile = FileIO.fromPath(Paths.get("result.zip"))
-        val referenceFile = FileIO.fromPath(Paths.get("reference.zip"))
+        val unzipResultMap = archiveHelper.unzip(resultFileContent).asScala
+        unzipResultMap should have size 2
 
-        val resultFileContent = resultFile.runWith(Sink.fold(ByteString.empty)(_ ++ _)).futureValue
-        val referenceFileContent = referenceFile.runWith(Sink.fold(ByteString.empty)(_ ++ _)).futureValue
+        val refFile1 = FileIO
+          .fromPath(filePath1)
+          .runWith(Sink.fold(ByteString.empty)(_ ++ _))
+          .futureValue
+        val refFile2 = FileIO
+          .fromPath(filePath2)
+          .runWith(Sink.fold(ByteString.empty)(_ ++ _))
+          .futureValue
 
-        resultFileContent shouldBe referenceFileContent
+        unzipResultMap("akka_full_color.svg") shouldBe refFile1
+        unzipResultMap("akka_icon_reverse.svg") shouldBe refFile2
 
         //cleanup
         new File("result.zip").delete()
-        new File("reference.zip").delete()
       }
 
       "archive files" in {
@@ -97,7 +111,7 @@ class ArchiveSpec extends WordSpec with Matchers with ScalaFutures {
             .via(zipFlow)
             .runWith(Sink.fold(ByteString.empty)(_ ++ _))
 
-        unzip(akkaZipped.futureValue) shouldBe inputFiles
+        archiveHelper.unzip(akkaZipped.futureValue).asScala shouldBe inputFiles
       }
     }
   }
@@ -105,46 +119,25 @@ class ArchiveSpec extends WordSpec with Matchers with ScalaFutures {
   private def getPathFromResources(fileName: String): Path =
     Paths.get(getClass.getClassLoader.getResource(fileName).getPath)
 
-  private def generateInputFiles(numberOfFiles: Int, lengthOfFile: Int): Map[String, Seq[Byte]] = {
+  private def generateInputFiles(numberOfFiles: Int, lengthOfFile: Int): Map[String, ByteString] = {
     val r = new scala.util.Random(31)
-    (1 to numberOfFiles).map(number => s"file-$number" -> r.nextString(lengthOfFile).getBytes.toSeq).toMap
+    (1 to numberOfFiles)
+      .map(number => s"file-$number" -> ByteString.fromArray(r.nextString(lengthOfFile).getBytes))
+      .toMap
   }
 
   private def filesToStream(
-      files: Map[String, Seq[Byte]]
+      files: Map[String, ByteString]
   ): Source[(ArchiveMetadata, Source[ByteString, NotUsed]), NotUsed] = {
     val sourceFiles = files.toList.map {
       case (title, content) =>
-        (ArchiveMetadata(title), Source(content.grouped(10).map(group => ByteString(group.toArray)).toList))
+        (ArchiveMetadata(title), Source(content.grouped(10).toList))
     }
     Source(sourceFiles)
   }
 
-  private def unzip(bytes: ByteString): Map[String, Seq[Byte]] = {
-    var result: Map[String, Seq[Byte]] = Map.empty
-    val zis = new ZipInputStream(new ByteArrayInputStream(bytes.toArray))
-    val buffer = new Array[Byte](1024)
-
-    try {
-      var zipEntry = zis.getNextEntry
-      while (zipEntry != null) {
-        val baos = new ByteArrayOutputStream()
-        val name = zipEntry.getName
-
-        var len = zis.read(buffer)
-
-        while (len > 0) {
-          baos.write(buffer, 0, len)
-          len = zis.read(buffer)
-        }
-        result += (name -> baos.toByteArray.toSeq)
-        baos.close()
-        zipEntry = zis.getNextEntry
-      }
-    } finally {
-      zis.closeEntry()
-      zis.close()
-    }
-    result
+  override def afterAll(): Unit = {
+    super.afterAll()
+    TestKit.shutdownActorSystem(system)
   }
 }

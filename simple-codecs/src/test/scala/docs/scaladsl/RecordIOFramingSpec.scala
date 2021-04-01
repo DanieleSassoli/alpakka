@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 //#run-via-scanner
 import akka.stream.alpakka.recordio.scaladsl.RecordIOFraming
 //#run-via-scanner
@@ -15,22 +15,23 @@ import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.testkit.TestKit
 import akka.util.ByteString
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
 
 import scala.collection.immutable.Seq
 import scala.concurrent.Future
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 
 class RecordIOFramingSpec(_system: ActorSystem)
     extends TestKit(_system)
-    with FlatSpecLike
+    with AnyFlatSpecLike
     with Matchers
     with ScalaFutures
-    with BeforeAndAfterAll {
+    with BeforeAndAfterAll
+    with LogCapturing {
   def this() = this(ActorSystem("RecordIOFramingSpec"))
 
   override protected def afterAll(): Unit = shutdown()
-
-  implicit val mat: Materializer = ActorMaterializer()
 
   //#run-via-scanner
 

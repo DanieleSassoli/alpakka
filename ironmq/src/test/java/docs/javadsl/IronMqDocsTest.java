@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,7 +7,6 @@ package docs.javadsl;
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 // #imports
 import akka.stream.alpakka.ironmq.*;
@@ -15,11 +14,13 @@ import akka.stream.alpakka.ironmq.javadsl.*;
 
 // #imports
 import akka.stream.alpakka.ironmq.impl.IronMqClientForJava;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.testkit.javadsl.TestKit;
 import org.junit.AfterClass;
+import org.junit.Rule;
 import org.junit.Test;
 import scala.concurrent.Await;
 
@@ -32,8 +33,10 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.Assert.assertEquals;
 
 public class IronMqDocsTest extends IronMqClientForJava {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static final ActorSystem system = ActorSystem.create();
-  private static final Materializer materializer = ActorMaterializer.create(system);
+  private static final Materializer materializer = Materializer.matFromSystem(system);
   private static final scala.concurrent.duration.Duration awaiting =
       scala.concurrent.duration.Duration.create(5, TimeUnit.SECONDS);
   private static final Duration patience = Duration.ofSeconds(5);

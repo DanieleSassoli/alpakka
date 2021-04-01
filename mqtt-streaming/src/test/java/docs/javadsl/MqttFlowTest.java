@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -9,10 +9,9 @@ import akka.NotUsed;
 import akka.actor.ActorSystem;
 import akka.japi.JavaPartialFunction;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
 import akka.stream.KillSwitches;
-import akka.stream.Materializer;
 import akka.stream.OverflowStrategy;
+import akka.stream.SystemMaterializer;
 import akka.stream.UniqueKillSwitch;
 import akka.stream.alpakka.mqtt.streaming.Command;
 import akka.stream.alpakka.mqtt.streaming.ConnAck;
@@ -34,6 +33,7 @@ import akka.stream.alpakka.mqtt.streaming.javadsl.ActorMqttServerSession;
 import akka.stream.alpakka.mqtt.streaming.javadsl.Mqtt;
 import akka.stream.alpakka.mqtt.streaming.javadsl.MqttClientSession;
 import akka.stream.alpakka.mqtt.streaming.javadsl.MqttServerSession;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Keep;
 import akka.stream.javadsl.Sink;
@@ -44,10 +44,7 @@ import akka.stream.javadsl.BroadcastHub;
 import akka.stream.testkit.javadsl.StreamTestKit;
 import akka.testkit.javadsl.TestKit;
 import akka.util.ByteString;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
@@ -65,22 +62,20 @@ import static org.junit.Assert.assertEquals;
 
 public class MqttFlowTest {
 
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static int TIMEOUT_SECONDS = 5;
 
   private static ActorSystem system;
-  private static Materializer materializer;
 
-  private static Pair<ActorSystem, Materializer> setupMaterializer() {
+  private static ActorSystem setupSystem() {
     final ActorSystem system = ActorSystem.create("MqttFlowTest");
-    final Materializer materializer = ActorMaterializer.create(system);
-    return Pair.create(system, materializer);
+    return system;
   }
 
   @BeforeClass
   public static void setup() {
-    final Pair<ActorSystem, Materializer> sysmat = setupMaterializer();
-    system = sysmat.first();
-    materializer = sysmat.second();
+    system = setupSystem();
   }
 
   @AfterClass
@@ -90,7 +85,7 @@ public class MqttFlowTest {
 
   @After
   public void assertStageStopping() {
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(SystemMaterializer.get(system).materializer());
   }
 
   @Test
@@ -101,7 +96,7 @@ public class MqttFlowTest {
 
     // #create-streaming-flow
     MqttSessionSettings settings = MqttSessionSettings.create();
-    MqttClientSession session = ActorMqttClientSession.create(settings, materializer, system);
+    MqttClientSession session = ActorMqttClientSession.create(settings, system);
 
     Flow<ByteString, ByteString, CompletionStage<Tcp.OutgoingConnection>> connection =
         Tcp.get(system).outgoingConnection("localhost", 1883);
@@ -124,7 +119,7 @@ public class MqttFlowTest {
                   }
                 })
             .toMat(Sink.head(), Keep.both())
-            .run(materializer);
+            .run(system);
 
     SourceQueueWithComplete<Command<Object>> commands = run.first();
     commands.offer(new Command<>(new Connect(clientId, ConnectFlags.CleanSession())));
@@ -160,7 +155,7 @@ public class MqttFlowTest {
 
     // #create-streaming-bind-flow
     MqttSessionSettings settings = MqttSessionSettings.create();
-    MqttServerSession session = ActorMqttServerSession.create(settings, materializer, system);
+    MqttServerSession session = ActorMqttServerSession.create(settings, system);
 
     int maxConnections = 1;
 
@@ -184,7 +179,7 @@ public class MqttFlowTest {
                           Source.<Command<Object>>queue(2, OverflowStrategy.dropHead())
                               .via(mqttFlow)
                               .toMat(BroadcastHub.of(DecodeErrorOrEvent.classOf()), Keep.both())
-                              .run(materializer);
+                              .run(system);
 
                   SourceQueueWithComplete<Command<Object>> queue = run.first();
                   Source<DecodeErrorOrEvent<Object>, NotUsed> source = run.second();
@@ -225,7 +220,7 @@ public class MqttFlowTest {
                           } // Ignore everything else
                         }
                       },
-                      materializer);
+                      system);
 
                   return source;
                 });
@@ -233,7 +228,7 @@ public class MqttFlowTest {
 
     // #run-streaming-bind-flow
     Pair<CompletionStage<Tcp.ServerBinding>, UniqueKillSwitch> bindingAndSwitch =
-        bindSource.viaMat(KillSwitches.single(), Keep.both()).to(Sink.ignore()).run(materializer);
+        bindSource.viaMat(KillSwitches.single(), Keep.both()).to(Sink.ignore()).run(system);
 
     CompletionStage<Tcp.ServerBinding> bound = bindingAndSwitch.first();
     UniqueKillSwitch server = bindingAndSwitch.second();
@@ -244,7 +239,7 @@ public class MqttFlowTest {
     Flow<ByteString, ByteString, CompletionStage<Tcp.OutgoingConnection>> connection =
         Tcp.get(system).outgoingConnection(host, port);
 
-    MqttClientSession clientSession = new ActorMqttClientSession(settings, materializer, system);
+    MqttClientSession clientSession = new ActorMqttClientSession(settings, system);
 
     Flow<Command<Object>, DecodeErrorOrEvent<Object>, NotUsed> mqttFlow =
         Mqtt.clientSessionFlow(clientSession, ByteString.fromString("1")).join(connection);
@@ -262,7 +257,7 @@ public class MqttFlowTest {
                   }
                 })
             .toMat(Sink.head(), Keep.both())
-            .run(materializer);
+            .run(system);
 
     SourceQueueWithComplete<Command<Object>> commands = run.first();
     commands.offer(new Command<>(new Connect(clientId, ConnectFlags.None())));

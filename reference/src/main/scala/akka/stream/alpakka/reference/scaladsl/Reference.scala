@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.reference.scaladsl
@@ -41,7 +41,7 @@ object Reference {
    */
   def flowWithResource(): Flow[ReferenceWriteMessage, ReferenceWriteResult, NotUsed] =
     Flow
-      .setup { (mat, attr) =>
+      .fromMaterializer { (mat, attr) =>
         Flow.fromGraph(new ReferenceWithResourceFlowStage(resolveResource(mat.system, attr)))
       }
       .mapMaterializedValue(_ => NotUsed)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.avroparquet.scaladsl
@@ -12,7 +12,7 @@ import scala.concurrent.Future
 
 object AvroParquetSink {
 
-  def apply(writer: ParquetWriter[GenericRecord]): Sink[GenericRecord, Future[Done]] =
+  def apply[T <: GenericRecord](writer: ParquetWriter[T]): Sink[T, Future[Done]] =
     Flow.fromGraph(new akka.stream.alpakka.avroparquet.impl.AvroParquetFlow(writer)).toMat(Sink.ignore)(Keep.right)
 
 }

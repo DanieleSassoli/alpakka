@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.google.firebase.fcm.impl
@@ -10,27 +10,31 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.settings.ConnectionPoolSettings
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.http.scaladsl.{HttpExt, HttpsConnectionContext}
-import akka.stream.ActorMaterializer
-import akka.stream.alpakka.google.firebase.fcm.{FcmErrorResponse, FcmSuccessResponse}
-import akka.stream.alpakka.google.firebase.fcm.FcmNotification
+import akka.stream.alpakka.google.GoogleSettings
+import akka.stream.alpakka.google.firebase.fcm.{FcmErrorResponse, FcmNotification, FcmSettings, FcmSuccessResponse}
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.testkit.TestKit
+import com.github.ghik.silencer.silent
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{verify, when}
+import org.mockito.Mockito.{doReturn, verify, when}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatestplus.mockito.MockitoSugar
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 class FcmSenderSpec
     extends TestKit(ActorSystem())
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with ScalaFutures
     with MockitoSugar
-    with BeforeAndAfterAll {
+    with BeforeAndAfterAll
+    with LogCapturing {
 
   import FcmJsonSupport._
 
@@ -42,7 +46,8 @@ class FcmSenderSpec
 
   implicit val executionContext: ExecutionContext = system.dispatcher
 
-  implicit val materializer = ActorMaterializer()
+  implicit val conf = FcmSettings()
+  implicit val settings = GoogleSettings().copy(projectId = "projectId")
 
   "FcmSender" should {
 
@@ -57,9 +62,9 @@ class FcmSenderSpec
       ).thenReturn(
         Future.successful(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, """{"name": ""}""")))
       )
+      doReturn(system, Nil: _*).when(http).system: @silent("dead code")
 
-      Await.result(sender.send("projectId", "token", http, FcmSend(false, FcmNotification.empty)),
-                   defaultPatience.timeout)
+      Await.result(sender.send(http, FcmSend(false, FcmNotification.empty)), defaultPatience.timeout)
 
       val captor: ArgumentCaptor[HttpRequest] = ArgumentCaptor.forClass(classOf[HttpRequest])
       verify(http).singleRequest(captor.capture(),
@@ -68,9 +73,9 @@ class FcmSenderSpec
                                  any[LoggingAdapter]())
       val request: HttpRequest = captor.getValue
       Unmarshal(request.entity).to[FcmSend].futureValue shouldBe FcmSend(false, FcmNotification.empty)
-      request.uri.toString shouldBe "https://fcm.googleapis.com/v1/projects/projectId/messages:send"
+      request.uri.toString should startWith("https://fcm.googleapis.com/v1/projects/projectId/messages:send")
       request.headers.size shouldBe 1
-      request.headers.head should matchPattern { case HttpHeader("authorization", "Bearer token") => }
+      request.headers.head should matchPattern { case HttpHeader("authorization", "Bearer <no-token>") => }
     }
 
     "parse the success response correctly" in {
@@ -84,9 +89,10 @@ class FcmSenderSpec
       ).thenReturn(
         Future.successful(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, """{"name": "test"}""")))
       )
+      doReturn(system, Nil: _*).when(http).system: @silent("dead code")
 
       sender
-        .send("projectId", "token", http, FcmSend(false, FcmNotification.empty))
+        .send(http, FcmSend(false, FcmNotification.empty))
         .futureValue shouldBe FcmSuccessResponse("test")
     }
 
@@ -104,9 +110,10 @@ class FcmSenderSpec
                        entity = HttpEntity(ContentTypes.`application/json`, """{"name":"test"}"""))
         )
       )
+      doReturn(system, Nil: _*).when(http).system: @silent("dead code")
 
       sender
-        .send("projectId", "token", http, FcmSend(false, FcmNotification.empty))
+        .send(http, FcmSend(false, FcmNotification.empty))
         .futureValue shouldBe FcmErrorResponse(
         """{"name":"test"}"""
       )

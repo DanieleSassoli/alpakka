@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.Done;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 import akka.stream.alpakka.avroparquet.javadsl.AvroParquetSink;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.javadsl.StreamTestKit;
@@ -21,10 +21,10 @@ import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static junit.framework.TestCase.assertEquals;
-import static junit.framework.TestCase.fail;
 
 // #init-writer
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -47,6 +46,8 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 
 public class AvroParquetSinkTest {
 
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private final Schema schema =
       new Schema.Parser()
           .parse(
@@ -54,14 +55,12 @@ public class AvroParquetSinkTest {
   private final Configuration conf = new Configuration();
   private final List<GenericRecord> records = new ArrayList<>();
   private ActorSystem system;
-  private Materializer materializer;
   private String folder = "target/javaTestFolder";
   private final String file = "./" + folder + "/test.parquet";
 
   @Before
   public void setup() {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
     conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, true);
     records.add(new GenericRecordBuilder(schema).set("id", "1").set("body", "body11").build());
     records.add(new GenericRecordBuilder(schema).set("id", "2").set("body", "body12").build());
@@ -72,6 +71,7 @@ public class AvroParquetSinkTest {
   public void createNewParquetFile()
       throws InterruptedException, IOException, TimeoutException, ExecutionException {
     // #init-writer
+
     Configuration conf = new Configuration();
     conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, true);
     ParquetWriter<GenericRecord> writer =
@@ -87,7 +87,7 @@ public class AvroParquetSinkTest {
     Sink<GenericRecord, CompletionStage<Done>> sink = AvroParquetSink.create(writer);
     // #init-sink
 
-    CompletionStage<Done> finish = Source.from(records).runWith(sink, materializer);
+    CompletionStage<Done> finish = Source.from(records).runWith(sink, system);
 
     finish.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -113,7 +113,7 @@ public class AvroParquetSinkTest {
 
   @After
   public void checkForStageLeaksAndDeleteCreatedFiles() {
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(system));
     TestKit.shutdownActorSystem(system);
     File index = new File(folder);
     index.deleteOnExit();

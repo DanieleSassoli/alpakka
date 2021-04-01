@@ -1,6 +1,6 @@
 # Apache Geode
 
-[Apache Geode](http://geode.apache.org) is a distributed datagrid (formerly called ["Gemfire" which is now Pivotal's packaging of Geode](https://pivotal.io/pivotal-gemfire)).
+[Apache Geode](https://geode.apache.org) is a distributed datagrid (formerly called ["Gemfire" which used to be Pivotal's packaging of Geode and now is VMware Tanzu](https://tanzu.vmware.com/gemfire)).
 
 Alpakka Geode provides flows and sinks to put elements into Geode, and a source to retrieve elements from it. It stores key-value-pairs. Keys and values must be serialized with Geode's support for it.
 
@@ -12,6 +12,11 @@ Alpakka Geode provides flows and sinks to put elements into Geode, and a source 
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-geode_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.

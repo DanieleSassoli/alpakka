@@ -1,24 +1,25 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.eip.scaladsl
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.kafka.{CommitterSettings, ConsumerMessage, ConsumerSettings, Subscriptions}
-import akka.kafka.scaladsl.{Committer, Consumer}
 import akka.kafka.scaladsl.Consumer.DrainingControl
-import akka.stream.{ActorMaterializer, FlowShape, Graph}
+import akka.kafka.scaladsl.{Committer, Consumer}
+import akka.kafka.{CommitterSettings, ConsumerMessage, ConsumerSettings, Subscriptions}
 import akka.stream.scaladsl._
+import akka.stream.{FlowShape, Graph}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
-class PassThroughExamples extends WordSpec with BeforeAndAfterAll with Matchers with ScalaFutures {
+class PassThroughExamples extends AnyWordSpec with BeforeAndAfterAll with Matchers with ScalaFutures {
 
   implicit val system = ActorSystem("Test")
-  implicit val mat = ActorMaterializer()
 
   "PassThroughFlow" should {
     " original message is maintained " in {
@@ -93,7 +94,6 @@ object PassThroughFlow {
 
 object PassThroughFlowKafkaCommitExample {
   implicit val system = ActorSystem("Test")
-  implicit val mat = ActorMaterializer()
 
   def dummy(): Unit = {
     // #passThroughKafkaFlow
@@ -107,8 +107,7 @@ object PassThroughFlowKafkaCommitExample {
       .committableSource(consumerSettings, Subscriptions.topics("topic1"))
       .via(PassThroughFlow(writeFlow, Keep.right))
       .map(_.committableOffset)
-      .toMat(Committer.sink(committerSettings))(Keep.both)
-      .mapMaterializedValue(DrainingControl.apply)
+      .toMat(Committer.sink(committerSettings))(DrainingControl.apply)
       .run()
     // #passThroughKafkaFlow
   }

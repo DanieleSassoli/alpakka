@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.couchbase.javadsl
@@ -41,7 +41,7 @@ object CouchbaseSession {
     ScalaDslCouchbaseSession
       .apply(settings, bucketName)(executionContext(executor))
       .map(new CouchbaseSessionJavaAdapter(_): CouchbaseSession)(
-        ExecutionContexts.sameThreadExecutionContext
+        ExecutionContexts.parasitic
       )
       .toJava
 
@@ -52,7 +52,7 @@ object CouchbaseSession {
   def create(client: AsyncCluster, bucketName: String, executor: Executor): CompletionStage[CouchbaseSession] =
     ScalaDslCouchbaseSession(client, bucketName)(executionContext(executor))
       .map(new CouchbaseSessionJavaAdapter(_): CouchbaseSession)(
-        ExecutionContexts.sameThreadExecutionContext
+        ExecutionContexts.parasitic
       )
       .toJava
 

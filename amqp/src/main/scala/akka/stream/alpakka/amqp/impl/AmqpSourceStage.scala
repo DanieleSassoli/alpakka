@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.impl
@@ -165,8 +165,8 @@ private[amqp] final class AmqpSourceStage(settings: AmqpSourceSettings, bufferSi
               pushMessage(queue.dequeue())
             }
 
-          override def onDownstreamFinish(): Unit =
-            if (unackedMessages == 0) super.onDownstreamFinish()
+          override def onDownstreamFinish(cause: Throwable): Unit =
+            if (unackedMessages == 0) super.onDownstreamFinish(cause)
             else {
               setKeepGoing(true)
               log.debug("Awaiting {} acks before finishing.", unackedMessages)

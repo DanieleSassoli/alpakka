@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
@@ -8,7 +8,6 @@ import java.nio.file.FileSystems
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import akka.stream.{ActorMaterializer, Materializer}
 
 import scala.concurrent.duration._
 
@@ -20,7 +19,6 @@ object FileTailSourceSpec {
     val path: String = args(0)
 
     implicit val system: ActorSystem = ActorSystem()
-    implicit val materializer: Materializer = ActorMaterializer()
 
     // #simple-lines
     import akka.stream.alpakka.file.scaladsl.FileTailSource

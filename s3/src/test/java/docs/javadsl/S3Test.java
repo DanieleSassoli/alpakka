@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -14,14 +14,13 @@ import akka.http.javadsl.model.HttpResponse;
 import akka.http.javadsl.model.Uri;
 import akka.http.javadsl.model.headers.ByteRange;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
 import akka.stream.Attributes;
-import akka.stream.Materializer;
 import akka.stream.alpakka.s3.*;
 import akka.stream.alpakka.s3.headers.CustomerKeys;
 import akka.stream.alpakka.s3.headers.ServerSideEncryption;
 import akka.stream.alpakka.s3.javadsl.S3;
 import akka.stream.alpakka.s3.scaladsl.S3WireMockBase;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.testkit.javadsl.TestKit;
@@ -29,6 +28,7 @@ import akka.util.ByteString;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -41,11 +41,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class S3Test extends S3WireMockBase {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
-  private static ActorSystem actorSystemForShutdown;
+  private static ActorSystem system;
   private static WireMockServer wireMockServerForShutdown;
-
-  private final Materializer materializer = ActorMaterializer.create(system());
 
   private final S3Settings sampleSettings = S3Ext.get(system()).settings();
   private final String prefix = listPrefix();
@@ -54,15 +53,15 @@ public class S3Test extends S3WireMockBase {
   @Before
   public void before() {
     wireMockServerForShutdown = _wireMockServer();
-    actorSystemForShutdown = system();
+    system = system();
   }
 
   @AfterClass
   public static void afterAll() throws Exception {
     wireMockServerForShutdown.stop();
-    Http.get(actorSystemForShutdown)
+    Http.get(system)
         .shutdownAllConnectionPools()
-        .thenRun(() -> TestKit.shutdownActorSystem(actorSystemForShutdown));
+        .thenRun(() -> TestKit.shutdownActorSystem(system));
   }
 
   @Test
@@ -76,8 +75,7 @@ public class S3Test extends S3WireMockBase {
     final Sink<ByteString, CompletionStage<MultipartUploadResult>> sink =
         S3.multipartUpload(bucket(), bucketKey());
 
-    final CompletionStage<MultipartUploadResult> resultCompletionStage =
-        file.runWith(sink, materializer);
+    final CompletionStage<MultipartUploadResult> resultCompletionStage = file.runWith(sink, system);
     // #upload
 
     MultipartUploadResult result =
@@ -102,7 +100,7 @@ public class S3Test extends S3WireMockBase {
             S3Headers.create().withServerSideEncryption(sseCustomerKeys()));
 
     final CompletionStage<MultipartUploadResult> resultCompletionStage =
-        Source.single(ByteString.fromString(body())).runWith(sink, materializer);
+        Source.single(ByteString.fromString(body())).runWith(sink, system);
 
     MultipartUploadResult result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -123,7 +121,7 @@ public class S3Test extends S3WireMockBase {
         sourceAndMeta = S3.download(bucket(), bucketKey());
     final Pair<Source<ByteString, NotUsed>, ObjectMetadata> dataAndMetadata =
         sourceAndMeta
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS)
             .get();
@@ -132,7 +130,7 @@ public class S3Test extends S3WireMockBase {
     final ObjectMetadata metadata = dataAndMetadata.second();
 
     final CompletionStage<String> resultCompletionStage =
-        data.map(ByteString::utf8String).runWith(Sink.head(), materializer);
+        data.map(ByteString::utf8String).runWith(Sink.head(), system);
 
     String result = resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
     // #download
@@ -167,7 +165,7 @@ public class S3Test extends S3WireMockBase {
     // #objectMetadata
 
     Optional<ObjectMetadata> result =
-        source.runWith(Sink.head(), materializer).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        source.runWith(Sink.head(), system).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
     final ObjectMetadata objectMetadata = result.get();
     Optional<String> s3eTag = objectMetadata.getETag();
@@ -188,7 +186,7 @@ public class S3Test extends S3WireMockBase {
         S3.getObjectMetadata(bucket(), bucketKey(), Optional.of(versionId), null);
 
     Optional<ObjectMetadata> result =
-        source.runWith(Sink.head(), materializer).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        source.runWith(Sink.head(), system).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
     final ObjectMetadata objectMetadata = result.get();
     Optional<String> s3eTag = objectMetadata.getETag();
@@ -206,7 +204,7 @@ public class S3Test extends S3WireMockBase {
         S3.getObjectMetadata(bucket(), bucketKey(), sseCustomerKeys());
 
     Optional<ObjectMetadata> result =
-        source.runWith(Sink.head(), materializer).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        source.runWith(Sink.head(), system).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
     Optional<String> etag = result.get().getETag();
 
@@ -222,13 +220,13 @@ public class S3Test extends S3WireMockBase {
 
     final Source<ByteString, NotUsed> source =
         sourceAndMeta
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS)
             .get()
             .first();
     final CompletionStage<String> resultCompletionStage =
-        source.map(ByteString::utf8String).runWith(Sink.head(), materializer);
+        source.map(ByteString::utf8String).runWith(Sink.head(), system);
 
     String result = resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -246,14 +244,14 @@ public class S3Test extends S3WireMockBase {
 
     final Pair<Source<ByteString, NotUsed>, ObjectMetadata> p =
         sourceAndMeta
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS)
             .orElseThrow(() -> new RuntimeException("empty Optional from S3.download"));
 
     final Source<ByteString, NotUsed> source = p.first();
     final CompletionStage<String> resultCompletionStage =
-        source.map(ByteString::utf8String).runWith(Sink.head(), materializer);
+        source.map(ByteString::utf8String).runWith(Sink.head(), system);
     final String result = resultCompletionStage.toCompletableFuture().get(2, TimeUnit.SECONDS);
     assertEquals(bodySSE(), result);
 
@@ -275,13 +273,13 @@ public class S3Test extends S3WireMockBase {
 
     final Source<ByteString, NotUsed> source =
         sourceAndMeta
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS)
             .get()
             .first();
     final CompletionStage<byte[]> resultCompletionStage =
-        source.map(ByteString::toArray).runWith(Sink.head(), materializer);
+        source.map(ByteString::toArray).runWith(Sink.head(), system);
 
     byte[] result = resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -303,13 +301,13 @@ public class S3Test extends S3WireMockBase {
 
     final Source<ByteString, NotUsed> source =
         sourceAndMeta
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS)
             .get()
             .first();
     final CompletionStage<byte[]> resultCompletionStage =
-        source.map(ByteString::toArray).runWith(Sink.head(), materializer);
+        source.map(ByteString::toArray).runWith(Sink.head(), system);
 
     byte[] result = resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -327,7 +325,7 @@ public class S3Test extends S3WireMockBase {
     // #list-bucket
 
     final CompletionStage<ListBucketResultContents> resultCompletionStage =
-        keySource.runWith(Sink.head(), materializer);
+        keySource.runWith(Sink.head(), system);
 
     ListBucketResultContents result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -349,7 +347,7 @@ public class S3Test extends S3WireMockBase {
     // #list-bucket-attributes
 
     final CompletionStage<ListBucketResultContents> resultCompletionStage =
-        keySource.runWith(Sink.head(), materializer);
+        keySource.runWith(Sink.head(), system);
 
     ListBucketResultContents result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -368,7 +366,7 @@ public class S3Test extends S3WireMockBase {
     // #list-bucket-delimiter
 
     final CompletionStage<ListBucketResultContents> resultCompletionStage =
-        keySource.runWith(Sink.head(), materializer);
+        keySource.runWith(Sink.head(), system);
 
     ListBucketResultContents result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -391,7 +389,7 @@ public class S3Test extends S3WireMockBase {
 
     final CompletionStage<
             List<Pair<List<ListBucketResultContents>, List<ListBucketResultCommonPrefixes>>>>
-        resultsCompletionStage = keySource.runWith(Sink.seq(), materializer);
+        resultsCompletionStage = keySource.runWith(Sink.seq(), system);
 
     final List<Pair<List<ListBucketResultContents>, List<ListBucketResultCommonPrefixes>>> results =
         resultsCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -421,7 +419,7 @@ public class S3Test extends S3WireMockBase {
 
     final CompletionStage<
             List<Pair<List<ListBucketResultContents>, List<ListBucketResultCommonPrefixes>>>>
-        resultsCompletionStage = keySource.runWith(Sink.seq(), materializer);
+        resultsCompletionStage = keySource.runWith(Sink.seq(), system);
 
     final List<Pair<List<ListBucketResultContents>, List<ListBucketResultCommonPrefixes>>> results =
         resultsCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -443,7 +441,7 @@ public class S3Test extends S3WireMockBase {
     String targetKey = targetBucketKey();
     // #multipart-copy
     final CompletionStage<MultipartUploadResult> resultCompletionStage =
-        S3.multipartCopy(bucket, sourceKey, targetBucket, targetKey).run(materializer);
+        S3.multipartCopy(bucket, sourceKey, targetBucket, targetKey).run(system);
     // #multipart-copy
 
     final MultipartUploadResult result =
@@ -474,7 +472,7 @@ public class S3Test extends S3WireMockBase {
                 targetKey,
                 Optional.of(sourceVersionId),
                 S3Headers.create())
-            .run(materializer);
+            .run(system);
     // #multipart-copy-with-source-version
 
     final MultipartUploadResult result =
@@ -495,8 +493,7 @@ public class S3Test extends S3WireMockBase {
     mockCopy(5242880);
 
     final CompletionStage<MultipartUploadResult> resultCompletionStage =
-        S3.multipartCopy(bucket(), bucketKey(), targetBucket(), targetBucketKey())
-            .run(materializer);
+        S3.multipartCopy(bucket(), bucketKey(), targetBucket(), targetBucketKey()).run(system);
     final MultipartUploadResult result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -511,8 +508,7 @@ public class S3Test extends S3WireMockBase {
     mockCopyMulti();
 
     final CompletionStage<MultipartUploadResult> resultCompletionStage =
-        S3.multipartCopy(bucket(), bucketKey(), targetBucket(), targetBucketKey())
-            .run(materializer);
+        S3.multipartCopy(bucket(), bucketKey(), targetBucket(), targetBucketKey()).run(system);
     final MultipartUploadResult result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -527,8 +523,7 @@ public class S3Test extends S3WireMockBase {
     mockCopy(0);
 
     final CompletionStage<MultipartUploadResult> resultCompletionStage =
-        S3.multipartCopy(bucket(), bucketKey(), targetBucket(), targetBucketKey())
-            .run(materializer);
+        S3.multipartCopy(bucket(), bucketKey(), targetBucket(), targetBucketKey()).run(system);
     final MultipartUploadResult result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -553,7 +548,7 @@ public class S3Test extends S3WireMockBase {
                 targetBucket(),
                 targetBucketKey(),
                 S3Headers.create().withServerSideEncryption(keys))
-            .run(materializer);
+            .run(system);
     // #multipart-copy-sse
 
     final MultipartUploadResult result =
@@ -576,7 +571,7 @@ public class S3Test extends S3WireMockBase {
                 targetBucket(),
                 targetBucketKey(),
                 S3Headers.create().withServerSideEncryption(ServerSideEncryption.aes256()))
-            .run(materializer);
+            .run(system);
 
     final MultipartUploadResult result =
         resultCompletionStage.toCompletableFuture().get(5, TimeUnit.SECONDS);
@@ -596,9 +591,9 @@ public class S3Test extends S3WireMockBase {
 
     final String bucketName = "samplebucket1";
 
-    CompletionStage<Done> makeBucketRequest = S3.makeBucket(bucketName, materializer);
+    CompletionStage<Done> makeBucketRequest = S3.makeBucket(bucketName, system);
     CompletionStage<Done> makeBucketRequestWithAttributes =
-        S3.makeBucket(bucketName, materializer, sampleAttributes);
+        S3.makeBucket(bucketName, system, sampleAttributes);
     Source<Done, NotUsed> makeBucketSourceRequest = S3.makeBucketSource(bucketName);
     // #make-bucket
 
@@ -608,7 +603,7 @@ public class S3Test extends S3WireMockBase {
         Done.done());
     assertEquals(
         makeBucketSourceRequest
-            .runWith(Sink.ignore(), materializer)
+            .runWith(Sink.ignore(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS),
         Done.done());
@@ -623,9 +618,9 @@ public class S3Test extends S3WireMockBase {
     // #delete-bucket
     final Attributes sampleAttributes = S3Attributes.settings(sampleSettings);
 
-    CompletionStage<Done> deleteBucketRequest = S3.deleteBucket(bucketName, materializer);
+    CompletionStage<Done> deleteBucketRequest = S3.deleteBucket(bucketName, system);
     CompletionStage<Done> deleteBucketRequestWithAttribues =
-        S3.deleteBucket(bucketName, materializer, sampleAttributes);
+        S3.deleteBucket(bucketName, system, sampleAttributes);
 
     Source<Done, NotUsed> deleteBucketSourceRequest = S3.deleteBucketSource(bucketName);
     // #delete-bucket
@@ -638,7 +633,7 @@ public class S3Test extends S3WireMockBase {
 
     assertEquals(
         deleteBucketSourceRequest
-            .runWith(Sink.ignore(), materializer)
+            .runWith(Sink.ignore(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS),
         Done.done());
@@ -652,9 +647,9 @@ public class S3Test extends S3WireMockBase {
     final Attributes sampleAttributes = S3Attributes.settings(sampleSettings);
 
     final CompletionStage<BucketAccess> doesntExistRequest =
-        S3.checkIfBucketExists(bucket(), materializer);
+        S3.checkIfBucketExists(bucket(), system);
     final CompletionStage<BucketAccess> doesntExistRequestWithAttributes =
-        S3.checkIfBucketExists(bucket(), materializer, sampleAttributes);
+        S3.checkIfBucketExists(bucket(), system, sampleAttributes);
 
     final Source<BucketAccess, NotUsed> doesntExistSourceRequest =
         S3.checkIfBucketExistsSource(bucket());
@@ -670,7 +665,7 @@ public class S3Test extends S3WireMockBase {
 
     assertEquals(
         doesntExistSourceRequest
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS),
         BucketAccess.notExists());
@@ -680,8 +675,7 @@ public class S3Test extends S3WireMockBase {
   public void checkIfBucketExistsForExisting() throws Exception {
     mockCheckingBucketStateForExistingBucket();
 
-    final CompletionStage<BucketAccess> existRequest =
-        S3.checkIfBucketExists(bucket(), materializer);
+    final CompletionStage<BucketAccess> existRequest = S3.checkIfBucketExists(bucket(), system);
 
     final Source<BucketAccess, NotUsed> existSourceRequest = S3.checkIfBucketExistsSource(bucket());
 
@@ -690,7 +684,7 @@ public class S3Test extends S3WireMockBase {
 
     assertEquals(
         existSourceRequest
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS),
         BucketAccess.accessGranted());
@@ -700,8 +694,7 @@ public class S3Test extends S3WireMockBase {
   public void checkIfBucketExistsForBucketWithoutRights() throws Exception {
     mockCheckingBucketStateForBucketWithoutRights();
 
-    final CompletionStage<BucketAccess> noRightsRequest =
-        S3.checkIfBucketExists(bucket(), materializer);
+    final CompletionStage<BucketAccess> noRightsRequest = S3.checkIfBucketExists(bucket(), system);
 
     final Source<BucketAccess, NotUsed> noRightsSourceRequest =
         S3.checkIfBucketExistsSource(bucket());
@@ -712,7 +705,7 @@ public class S3Test extends S3WireMockBase {
 
     assertEquals(
         noRightsSourceRequest
-            .runWith(Sink.head(), materializer)
+            .runWith(Sink.head(), system)
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS),
         BucketAccess.accessDenied());

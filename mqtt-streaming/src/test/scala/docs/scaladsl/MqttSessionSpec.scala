@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
@@ -14,26 +14,32 @@ import akka.stream.alpakka.mqtt.streaming.scaladsl.{
   Mqtt,
   MqttServerSession
 }
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, Sink, Source, SourceQueueWithComplete}
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
-import akka.stream.{ActorMaterializer, Materializer, OverflowStrategy}
+import akka.stream.OverflowStrategy
 import akka.testkit._
 import akka.util.{ByteString, Timeout}
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Millis, Span}
 
 import scala.concurrent.{ExecutionContext, Promise}
 import scala.concurrent.duration._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.slf4j.LoggerFactory
 
 class MqttSessionSpec
     extends TestKit(ActorSystem("mqtt-spec"))
-    with WordSpecLike
+    with AnyWordSpecLike
     with BeforeAndAfterAll
     with ScalaFutures
-    with Matchers {
+    with Matchers
+    with LogCapturing {
 
-  implicit val mat: Materializer = ActorMaterializer()
+  val log = LoggerFactory.getLogger(classOf[MqttSessionSpec])
+
   implicit val executionContext: ExecutionContext = system.dispatcher
   implicit val timeout: Timeout = Timeout(3.seconds.dilated)
 
@@ -465,7 +471,7 @@ class MqttSessionSpec
 
       val publishReceived = Promise[Done]
 
-      val client = Source
+      val (client, result) = Source
         .queue(1, OverflowStrategy.fail)
         .via(
           Mqtt
@@ -476,7 +482,7 @@ class MqttSessionSpec
           case Right(Event(cp: Publish, None)) => cp
         }
         .wireTap(_ => publishReceived.success(Done))
-        .toMat(Sink.ignore)(Keep.left)
+        .toMat(Sink.ignore)(Keep.both)
         .run()
 
       val connectBytes = connect.encode(ByteString.newBuilder).result()
@@ -509,6 +515,7 @@ class MqttSessionSpec
 
       server.expectMsg(pubAckBytes)
       client.complete()
+      result.futureValue shouldBe Done
       client.watchCompletion().foreach(_ => session.shutdown())
     }
 
@@ -570,6 +577,7 @@ class MqttSessionSpec
 
       deliverPubAck1.future.futureValue shouldBe Done
       server.expectMsg(pubAckBytes)
+      server.reply(ByteString.empty)
 
       val deliverPubAck2 = Promise[Done]
       client.offer(Command(pubAck, Some(deliverPubAck2), None))
@@ -911,7 +919,11 @@ class MqttSessionSpec
       server.reply(secondPubAckBytes)
 
       client.complete()
-      client.watchCompletion().foreach(_ => session.shutdown())
+      log.debug("client.complete()")
+      client.watchCompletion().foreach { _ =>
+        log.debug("client completed")
+        session.shutdown()
+      }
     }
 
     "publish with a QoS of 1 and cause a retry given a timeout" in /* failing when enabled assertAllStagesStopped */ {
@@ -1535,7 +1547,7 @@ class MqttSessionSpec
 
       fromClientQueue.offer(unsubscribeBytes)
 
-      unsubscribeReceived.future.foreach(_ => server.offer(Command(unsubAck)))(mat.executionContext)
+      unsubscribeReceived.future.foreach(_ => server.offer(Command(unsubAck)))(executionContext)
 
       client.fishForSpecificMessage(3.seconds.dilated) {
         case `unsubAckBytes` =>

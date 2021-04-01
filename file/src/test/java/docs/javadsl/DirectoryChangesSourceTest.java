@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,24 +7,21 @@ package docs.javadsl;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 import akka.stream.alpakka.file.DirectoryChange;
 // #minimal-sample
 import akka.stream.alpakka.file.javadsl.DirectoryChangesSource;
 // #minimal-sample
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.TestSubscriber;
 import akka.stream.testkit.javadsl.StreamTestKit;
-import akka.testkit.TestKit;
+import akka.testkit.javadsl.TestKit;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import com.google.common.jimfs.WatchServiceConfiguration;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import scala.concurrent.duration.FiniteDuration;
+import org.junit.*;
 
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -39,16 +36,25 @@ import static org.junit.Assert.assertEquals;
 
 public class DirectoryChangesSourceTest {
 
-  private ActorSystem system;
-  private Materializer materializer;
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private FileSystem fs;
   private Path testDir;
 
+  private static ActorSystem system;
+
+  @BeforeClass
+  public static void beforeAll() throws Exception {
+    system = ActorSystem.create();
+  }
+
+  @AfterClass
+  public static void afterAll() throws Exception {
+    TestKit.shutdownActorSystem(system);
+  }
+
   @Before
   public void setup() throws Exception {
-    system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
-
     fs =
         Jimfs.newFileSystem(
             Configuration.forCurrentPlatform()
@@ -67,7 +73,7 @@ public class DirectoryChangesSourceTest {
     final TestSubscriber.Probe<Pair<Path, DirectoryChange>> probe = TestSubscriber.probe(system);
 
     DirectoryChangesSource.create(testDir, Duration.ofMillis(250), 200)
-        .runWith(Sink.fromSubscriber(probe), materializer);
+        .runWith(Sink.fromSubscriber(probe), system);
 
     probe.request(1);
 
@@ -100,7 +106,7 @@ public class DirectoryChangesSourceTest {
     final int numberOfChanges = 50;
 
     DirectoryChangesSource.create(testDir, Duration.ofMillis(250), numberOfChanges * 2)
-        .runWith(Sink.fromSubscriber(probe), materializer);
+        .runWith(Sink.fromSubscriber(probe), system);
 
     probe.request(numberOfChanges);
 
@@ -129,8 +135,7 @@ public class DirectoryChangesSourceTest {
 
   @After
   public void tearDown() throws Exception {
-    StreamTestKit.assertAllStagesStopped(materializer);
-    TestKit.shutdownActorSystem(system, FiniteDuration.apply(3, TimeUnit.SECONDS), true);
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(system));
     fs.close();
   }
 
@@ -140,7 +145,6 @@ public class DirectoryChangesSourceTest {
     final String path = args[0];
 
     final ActorSystem system = ActorSystem.create();
-    final Materializer materializer = ActorMaterializer.create(system);
 
     // #minimal-sample
 
@@ -156,7 +160,7 @@ public class DirectoryChangesSourceTest {
           final DirectoryChange change = pair.second();
           System.out.println("Path: " + changedPath + ", Change: " + change);
         },
-        materializer);
+        system);
     // #minimal-sample
   }
 }

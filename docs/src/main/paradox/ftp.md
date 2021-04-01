@@ -13,6 +13,11 @@ The FTP connector provides Akka Stream sources to connect to FTP, FTPs and SFTP 
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-ftp_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.
@@ -41,13 +46,23 @@ For connection via a proxy, please provide an instance of `java.net.Proxy` by us
 
 For connection using a private key, please provide an instance of @scaladoc[SftpIdentity](akka.stream.alpakka.ftp.SftpIdentity) to @scaladoc[SftpSettings](akka.stream.alpakka.ftp.SftpSettings).
 
-In order to use a custom SSH client for SFTP please provide an instance of [SSHClient](https://static.javadoc.io/com.hierynomus/sshj/0.26.0/net/schmizz/sshj/SSHClient.html).
+In order to use a custom SSH client for SFTP please provide an instance of [SSHClient](https://www.javadoc.io/doc/com.hierynomus/sshj/0.27.0/net/schmizz/sshj/SSHClient.html).
 
 Scala
 : @@snip [snip](/ftp/src/test/scala/docs/scaladsl/scalaExamples.scala) { #configure-custom-ssh-client }
 
 Java
 : @@snip [snip](/ftp/src/test/java/docs/javadsl/ConfigureCustomSSHClient.java) { #configure-custom-ssh-client }
+
+### Improving SFTP throughput
+For SFTP connections allowing more than one unconfirmed read request to be sent by the client you can use `withMaxUnconfirmedReads` on @scaladoc[SftpSettings](akka.stream.alpakka.ftp.SftpSettings)  
+The command-line tool `sftp` uses a value of `64` by default.  This can significantly improve throughput by reducing the impact of latency.
+
+Scala
+: @@snip [snip](/ftp/src/test/scala/docs/scaladsl/scalaExamples.scala) { #retrieving-with-unconfirmed-reads }
+
+Java
+: @@snip [snip](/ftp/src/test/java/docs/javadsl/SftpRetrievingExample.java) { #retrieving-with-unconfirmed-reads }
 
 ## Traversing a remote FTP folder recursively
 

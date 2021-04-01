@@ -26,6 +26,11 @@ Lines are separated by either Line Feed (`\n` = ASCII 10) or Carriage Return and
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-csv_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.
@@ -112,7 +117,7 @@ The formatter takes care of quoting and escaping.
 Certain CSV readers (e.g. Microsoft Excel) require CSV files to indicate their character encoding with a *Byte
 Order Mark* (BOM) in the first bytes of the file. Choose an appropriate Byte Order Mark matching the
 selected character set from the constants in `ByteOrderMark`
-([Unicode FAQ on Byte Order Mark](http://www.unicode.org/faq/utf_bom.html#bom1)).
+([Unicode FAQ on Byte Order Mark](https://www.unicode.org/faq/utf_bom.html#bom1)).
 
 
 Scala

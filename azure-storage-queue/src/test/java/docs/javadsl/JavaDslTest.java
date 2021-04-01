@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,9 +7,9 @@ package docs.javadsl;
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 import akka.stream.alpakka.azure.storagequeue.*;
 import akka.stream.alpakka.azure.storagequeue.javadsl.*;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.javadsl.StreamTestKit;
@@ -28,8 +28,9 @@ import java.util.function.Supplier;
 import org.junit.*;
 
 public class JavaDslTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static ActorSystem system;
-  private static ActorMaterializer materializer;
   private static final String storageConnectionString = System.getenv("AZURE_CONNECTION_STRING");
   private static final Supplier<CloudQueue> queueSupplier =
       () -> {
@@ -48,10 +49,8 @@ public class JavaDslTest {
   private static final CloudQueue queue = queueSupplier.get();
 
   @BeforeClass
-  public static void setup()
-      throws StorageException, java.net.URISyntaxException, java.security.InvalidKeyException {
+  public static void setup() throws StorageException {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
 
     if (queue != null) {
       queue.createIfNotExists();
@@ -75,7 +74,7 @@ public class JavaDslTest {
 
   @After
   public void checkForStageLeaks() {
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(akka.stream.Materializer.matFromSystem(system));
   }
 
   @Test
@@ -89,7 +88,7 @@ public class JavaDslTest {
     final Sink<CloudQueueMessage, CompletionStage<Done>> sink =
         AzureQueueSink.create(queueSupplier);
 
-    source.runWith(sink, materializer).toCompletableFuture().get(10, TimeUnit.SECONDS);
+    source.runWith(sink, system).toCompletableFuture().get(10, TimeUnit.SECONDS);
 
     Assert.assertNotNull(queue.retrieveMessage());
   }
@@ -108,7 +107,7 @@ public class JavaDslTest {
     final Sink<MessageWithTimeouts, CompletionStage<Done>> sink =
         AzureQueueWithTimeoutsSink.create(queueSupplier);
 
-    source.runWith(sink, materializer).toCompletableFuture().get(10, TimeUnit.SECONDS);
+    source.runWith(sink, system).toCompletableFuture().get(10, TimeUnit.SECONDS);
 
     Assert.assertNull(
         queue.retrieveMessage()); // There should be no message because of inital visibility timeout
@@ -121,13 +120,13 @@ public class JavaDslTest {
 
     // Queue 10 Messages
     for (int i = 0; i < 10; i++) {
-      queue.addMessage(new CloudQueueMessage("Java Test " + Integer.toString(i)));
+      queue.addMessage(new CloudQueueMessage("Java Test " + i));
     }
 
     final Source<CloudQueueMessage, NotUsed> source = AzureQueueSource.create(queueSupplier);
 
     final CompletionStage<List<CloudQueueMessage>> msgs =
-        source.take(10).runWith(Sink.seq(), materializer);
+        source.take(10).runWith(Sink.seq(), system);
 
     msgs.toCompletableFuture().get(10, TimeUnit.SECONDS);
   }
@@ -139,7 +138,7 @@ public class JavaDslTest {
 
     // Queue 10 Messages
     for (int i = 0; i < 10; i++) {
-      queue.addMessage(new CloudQueueMessage("Java Test " + Integer.toString(i)));
+      queue.addMessage(new CloudQueueMessage("Java Test " + i));
     }
 
     // We limit us to buffers of size 1 here, so that there are no stale message in the buffer
@@ -151,7 +150,7 @@ public class JavaDslTest {
     final Sink<CloudQueueMessage, CompletionStage<Done>> deleteSink =
         AzureQueueDeleteSink.create(queueSupplier);
 
-    final CompletionStage<Done> done = source.take(10).runWith(deleteSink, materializer);
+    final CompletionStage<Done> done = source.take(10).runWith(deleteSink, system);
 
     done.toCompletableFuture().get(10, TimeUnit.SECONDS);
 
@@ -165,7 +164,7 @@ public class JavaDslTest {
 
     // Queue 10 Messages
     for (int i = 0; i < 10; i++) {
-      queue.addMessage(new CloudQueueMessage("Java Test " + Integer.toString(i)));
+      queue.addMessage(new CloudQueueMessage("Java Test " + i));
     }
 
     // We limit us to buffers of size 1 here, so that there are no stale message in the buffer
@@ -181,7 +180,7 @@ public class JavaDslTest {
         source
             .take(10)
             .map(msg -> new MessageAndDeleteOrUpdate(msg, DeleteOrUpdateMessage.createDelete()))
-            .runWith(deleteOrUpdateSink, materializer);
+            .runWith(deleteOrUpdateSink, system);
 
     done.toCompletableFuture().get(10, TimeUnit.SECONDS);
 

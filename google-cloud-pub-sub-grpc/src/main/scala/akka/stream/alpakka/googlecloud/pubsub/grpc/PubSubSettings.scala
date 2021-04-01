@@ -1,15 +1,18 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.googlecloud.pubsub.grpc
 
-import akka.actor.ActorSystem
-import akka.stream.alpakka.googlecloud.pubsub.grpc.impl.GrpcCredentials
+import akka.actor.ClassicActorSystemProvider
+import akka.stream.alpakka.googlecloud.pubsub.grpc.impl.DeprecatedCredentials
+import com.github.ghik.silencer.silent
+import com.google.auth.oauth2.GoogleCredentials
 import com.typesafe.config.Config
 import io.grpc.CallCredentials
+import io.grpc.auth.MoreCallCredentials
 
-import scala.util.Try
+import java.util.Collections
 
 /**
  * Connection settings used to establish Pub/Sub connection.
@@ -17,8 +20,14 @@ import scala.util.Try
 final class PubSubSettings private (
     val host: String,
     val port: Int,
-    val rootCa: Option[String] = None,
-    val callCredentials: Option[CallCredentials] = None
+    val useTls: Boolean,
+    val rootCa: Option[String],
+    /** @deprecated Use [[akka.stream.alpakka.google.GoogleSettings]] */ @deprecated(
+      "Use akka.stream.alpakka.google.GoogleSettings",
+      "3.0.0"
+    ) @Deprecated val callCredentials: Option[
+      CallCredentials
+    ]
 ) {
 
   /**
@@ -40,15 +49,19 @@ final class PubSubSettings private (
 
   /**
    * Credentials that are going to be used for gRPC call authorization.
+   * @deprecated Use [[akka.stream.alpakka.google.GoogleSettings]]
    */
+  @deprecated("Use akka.stream.alpakka.google.GoogleSettings", "3.0.0")
+  @Deprecated
   def withCallCredentials(callCredentials: CallCredentials): PubSubSettings =
     copy(callCredentials = Some(callCredentials))
 
   private def copy(host: String = host,
                    port: Int = port,
+                   useTls: Boolean = useTls,
                    rootCa: Option[String] = rootCa,
-                   callCredentials: Option[CallCredentials] = callCredentials) =
-    new PubSubSettings(host, port, rootCa, callCredentials)
+                   callCredentials: Option[CallCredentials] = callCredentials: @silent("deprecated")) =
+    new PubSubSettings(host, port, useTls, rootCa, callCredentials)
 }
 
 object PubSubSettings {
@@ -58,40 +71,36 @@ object PubSubSettings {
    * and unauthorized (no call credentials) endpoint.
    */
   def apply(host: String, port: Int): PubSubSettings =
-    new PubSubSettings(host, port)
+    new PubSubSettings(host, port, false, None, None)
 
   /**
    * Create settings from config instance.
    */
-  def apply(config: Config): PubSubSettings = {
-    val host = config.getString("host")
-    val port = config.getInt("port")
-
-    val pubSubConfig = PubSubSettings(host, port)
-
-    val setRootCa = (pubSubConfig: PubSubSettings) =>
-      config.getString("rootCa") match {
-        case fileName if fileName != "none" => pubSubConfig.withRootCa(fileName)
-        case _ => pubSubConfig
-      }
-    val setCallCredentials = (pubSubConfig: PubSubSettings) =>
+  def apply(config: Config): PubSubSettings =
+    new PubSubSettings(
+      config.getString("host"),
+      config.getInt("port"),
+      config.getBoolean("use-tls"),
+      Some(config.getString("rootCa")).filter(_ != "none"),
       config.getString("callCredentials") match {
-        case "google-application-default" =>
-          Try(GrpcCredentials.applicationDefault())
-            .map(pubSubConfig.withCallCredentials)
-            .getOrElse(pubSubConfig)
-        case _ => pubSubConfig
+        case "google-application-default" | "deprecated" =>
+          val googleCredentials = GoogleCredentials.getApplicationDefault.createScoped(
+            Collections.singletonList("https://www.googleapis.com/auth/pubsub")
+          )
+          Some(DeprecatedCredentials(MoreCallCredentials.from(googleCredentials)))
+        case _ => None
       }
-
-    Seq(setRootCa, setCallCredentials).foldLeft(pubSubConfig) {
-      case (config, f) => f(config)
-    }
-  }
+    )
 
   /**
-   * Create settings from ActorSystem's config.
+   * Create settings from the new actor API's ActorSystem config.
    */
-  def apply(system: ActorSystem): PubSubSettings =
+  def apply(system: ClassicActorSystemProvider): PubSubSettings = apply(system.classicSystem)
+
+  /**
+   * Create settings from a classic ActorSystem's config.
+   */
+  def apply(system: akka.actor.ActorSystem): PubSubSettings =
     PubSubSettings(system.settings.config.getConfig("alpakka.google.cloud.pubsub.grpc"))
 
   /**
@@ -116,6 +125,13 @@ object PubSubSettings {
    *
    * Create settings from ActorSystem's config.
    */
-  def create(system: ActorSystem): PubSubSettings =
+  def create(system: ClassicActorSystemProvider): PubSubSettings = PubSubSettings(system.classicSystem)
+
+  /**
+   * Java API
+   *
+   * Create settings from a classic ActorSystem's config.
+   */
+  def create(system: akka.actor.ActorSystem): PubSubSettings =
     PubSubSettings(system)
 }

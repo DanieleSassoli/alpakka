@@ -3,7 +3,7 @@
 The connector provides sources, flows and sinks to interact with HBase database.
 
 HBase is a column family NoSQL Database backed by HDFS.
-For more information about HBase, please visit the [HBase documentation](http://hbase.apache.org).
+For more information about HBase, please visit the [HBase documentation](https://hbase.apache.org).
 
 @@project-info{ projectId="hbase" }
 
@@ -13,6 +13,11 @@ For more information about HBase, please visit the [HBase documentation](http://
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-hbase_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.

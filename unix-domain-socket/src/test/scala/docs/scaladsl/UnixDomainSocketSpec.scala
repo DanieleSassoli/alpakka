@@ -1,36 +1,44 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
-import java.io.IOException
-import java.nio.file.{Files, Paths}
-import java.util.concurrent.TimeUnit
-
 import akka.Done
 import akka.actor.ActorSystem
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.alpakka.unixdomainsocket.UnixSocketAddress
-import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.alpakka.unixdomainsocket.scaladsl.UnixDomainSocket
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+import akka.stream.{Materializer, OverflowStrategy}
 import akka.testkit._
 import akka.util.ByteString
 import org.scalatest._
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
-import scala.concurrent.{Future, Promise}
+import java.io.IOException
+import java.nio.file.{Files, Paths}
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.util.{Failure, Success}
 
 class UnixDomainSocketSpec
     extends TestKit(ActorSystem("UnixDomainSocketSpec"))
-    with AsyncWordSpecLike
+    with AnyWordSpecLike
     with Matchers
-    with BeforeAndAfterAll {
+    with ScalaFutures
+    with BeforeAndAfterAll
+    with IntegrationPatience
+    with LogCapturing {
 
   override def afterAll: Unit =
     TestKit.shutdownActorSystem(system)
 
-  implicit val ma: ActorMaterializer = ActorMaterializer()
+  implicit val ma: Materializer = Materializer(system)
+  implicit val ec: ExecutionContext = system.dispatcher
 
   private val dir = Files.createTempDirectory("UnixDomainSocketSpec")
 
@@ -52,17 +60,16 @@ class UnixDomainSocketSpec
       //#binding
 
       //#outgoingConnection
+      val sendBytes = ByteString("Hello")
       binding.flatMap { _ => // connection
-        val sendBytes = ByteString("Hello")
         Source
           .single(sendBytes)
           .via(UnixDomainSocket().outgoingConnection(path))
           .runWith(Sink.ignore)
-        //#outgoingConnection
-        received.future.map(receiveBytes => assert(receiveBytes == sendBytes))
-        //#outgoingConnection
       }
       //#outgoingConnection
+      received.future.futureValue shouldBe sendBytes
+      binding.futureValue.unbind().futureValue should be(())
     }
 
     "send and receive more ten times the size of a buffer" ignore {
@@ -73,20 +80,17 @@ class UnixDomainSocketSpec
       val binding: Future[UnixDomainSocket.ServerBinding] =
         UnixDomainSocket().bindAndHandle(Flow.fromFunction(identity), path, halfClose = true)
 
-      binding.flatMap { connection =>
-        val sendBytes = ByteString(Array.ofDim[Byte](BufferSizeBytes * 10))
-        val result: Future[ByteString] =
+      val sendBytes = ByteString(Array.ofDim[Byte](BufferSizeBytes * 10))
+      val result: Future[ByteString] =
+        binding.flatMap { connection =>
           Source
             .single(sendBytes)
             .via(UnixDomainSocket().outgoingConnection(path))
             .runWith(Sink.fold(ByteString.empty) { case (acc, b) => acc ++ b })
-        result
-          .map(receiveBytes => assert(receiveBytes == sendBytes))
-          .flatMap {
-            case `succeed` => connection.unbind().map(_ => succeed)
-            case failedAssertion => failedAssertion
-          }
-      }
+
+        }
+      result.futureValue shouldBe sendBytes
+      binding.futureValue.unbind().futureValue should be(())
     }
 
     "allow the client to close the connection" in {
@@ -97,15 +101,14 @@ class UnixDomainSocketSpec
       val binding =
         UnixDomainSocket().bindAndHandle(Flow[ByteString].delay(5.seconds), path)
 
-      binding.flatMap { connection =>
+      val result = binding.flatMap { connection =>
         Source
           .single(sendBytes)
           .via(UnixDomainSocket().outgoingConnection(UnixSocketAddress(path), halfClose = false))
           .runWith(Sink.headOption)
-          .flatMap {
-            case e if e.isEmpty => connection.unbind().map(_ => succeed)
-          }
       }
+      result.futureValue shouldBe Symbol("empty")
+      binding.futureValue.unbind().futureValue should be(())
     }
 
     "close the server once the client is also closed" in {
@@ -121,16 +124,15 @@ class UnixDomainSocketSpec
           halfClose = true
         )
 
-      binding.flatMap { connection =>
+      val result = binding.flatMap { connection =>
         Source
           .tick(0.seconds, 1.second, sendBytes)
           .takeWhile(_ => !receiving.isCompleted)
           .via(UnixDomainSocket().outgoingConnection(path))
           .runWith(Sink.headOption)
-          .flatMap {
-            case e if e.nonEmpty => connection.unbind().map(_ => succeed)
-          }
       }
+      result.futureValue shouldNot be(Symbol("empty"))
+      binding.futureValue.unbind().futureValue should be(())
     }
 
     "be able to materialize outgoing connection flow more than once" in {
@@ -153,28 +155,37 @@ class UnixDomainSocketSpec
       materialize(connection)
 
       receivedLatch.await(5, TimeUnit.SECONDS)
-
-      succeed
     }
 
-    "not be able to bind to a non-existent file" in {
+    "not be able to bind to socket in a non-existent directory" in {
       val binding =
-        UnixDomainSocket().bindAndHandle(Flow.fromFunction(identity), Paths.get("/thisshouldnotexist"))
+        UnixDomainSocket().bindAndHandle(Flow.fromFunction(identity), Paths.get("/nonexistentdir/socket"))
 
-      binding.failed.map {
-        case _: IOException => succeed
-      }
+      val bindingFailure = binding.failed.futureValue
+      bindingFailure shouldBe an[IOException]
+      bindingFailure.getMessage should startWith("No such file or directory")
     }
 
     "not be able to connect to a non-existent file" in {
-      val connection =
+      val (binding, result) =
         Source
           .single(ByteString("hi"))
-          .via(UnixDomainSocket().outgoingConnection(Paths.get("/thisshouldnotexist")))
-          .runWith(Sink.head)
+          .viaMat(UnixDomainSocket().outgoingConnection(Paths.get("/thisshouldnotexist")))(Keep.right)
+          .log("after")
+          .toMat(Sink.headOption)(Keep.both)
+          .run()
 
-      connection.failed.map {
-        case _: IOException => succeed
+      val bindingFailure = binding.failed.futureValue
+      bindingFailure shouldBe an[IOException]
+      bindingFailure.getMessage shouldBe "No such file or directory"
+
+      // Verbose for diagnosing https://github.com/akka/alpakka/issues/2437
+      Await.ready(result, 10.seconds)
+      result.value.get match {
+        case Success(headOption) =>
+          fail(s"Unexpected successful completion with value [$headOption]")
+        case Failure(e) =>
+          e shouldBe an[IOException]
       }
     }
 

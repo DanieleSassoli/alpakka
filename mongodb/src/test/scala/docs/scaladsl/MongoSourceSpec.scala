@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.alpakka.mongodb.scaladsl.MongoSource
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import com.mongodb.reactivestreams.client.MongoClients
@@ -19,21 +19,23 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.concurrent.duration._
+import org.scalatest.matchers.must.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 class MongoSourceSpec
-    extends WordSpec
+    extends AnyWordSpec
     with ScalaFutures
     with BeforeAndAfterEach
     with BeforeAndAfterAll
-    with MustMatchers {
+    with Matchers
+    with LogCapturing {
 
-  // #init-mat
+  // #init-system
   implicit val system = ActorSystem()
-  implicit val mat = ActorMaterializer()
-  // #init-mat
+  // #init-system
 
   override protected def beforeAll(): Unit =
-    Source.fromPublisher(db.drop()).runWith(Sink.head).futureValue
+    Source.fromPublisher(db.drop()).runWith(Sink.headOption).futureValue
 
   java.util.logging.Logger.getLogger("org.mongodb.driver").setLevel(java.util.logging.Level.SEVERE)
 
@@ -43,7 +45,7 @@ class MongoSourceSpec
 
   // #codecs
   import org.bson.codecs.configuration.CodecRegistries.{fromProviders, fromRegistries}
-  import org.mongodb.scala.bson.codecs.DEFAULT_CODEC_REGISTRY
+  import org.mongodb.scala.MongoClient.DEFAULT_CODEC_REGISTRY
   import org.mongodb.scala.bson.codecs.Macros._
 
   val codecRegistry = fromRegistries(fromProviders(classOf[Number]), DEFAULT_CODEC_REGISTRY)

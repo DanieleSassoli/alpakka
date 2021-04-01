@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.avroparquet.impl
@@ -13,12 +13,12 @@ import org.apache.parquet.hadoop.ParquetWriter
  * Internal API
  */
 @InternalApi
-private[avroparquet] class AvroParquetFlow(writer: ParquetWriter[GenericRecord])
-    extends GraphStage[FlowShape[GenericRecord, GenericRecord]] {
+private[avroparquet] class AvroParquetFlow[T <: GenericRecord](writer: ParquetWriter[T])
+    extends GraphStage[FlowShape[T, T]] {
 
-  val in: Inlet[GenericRecord] = Inlet("AvroParquetSink.in")
-  val out: Outlet[GenericRecord] = Outlet("AvroParquetSink.out")
-  override val shape: FlowShape[GenericRecord, GenericRecord] = FlowShape.of(in, out)
+  val in: Inlet[T] = Inlet("AvroParquetSink.in")
+  val out: Outlet[T] = Outlet("AvroParquetSink.out")
+  override val shape: FlowShape[T, T] = FlowShape.of(in, out)
 
   override protected def initialAttributes: Attributes =
     super.initialAttributes and ActorAttributes.IODispatcher

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.csv.impl
@@ -182,7 +182,7 @@ import scala.collection.mutable
   private[this] def checkForByteOrderMark(): Unit =
     if (buffer.length >= 2) {
       if (buffer.startsWith(ByteOrderMark.UTF_8)) {
-        advance(4)
+        advance(3)
         fieldStart = 3
       } else {
         if (buffer.startsWith(ByteOrderMark.UTF_16_LE)) {

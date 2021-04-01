@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.mqtt.streaming
@@ -548,13 +548,6 @@ object MqttCodec {
   final case class BadSubscribeMessage(packetId: PacketId,
                                        topicFilters: Seq[(Either[DecodeError, String], ControlPacketFlags)])
       extends DecodeError
-
-  /**
-   * Unable to subscribe at the requested QoS
-   * @deprecated this message was never able to be returned - always use [[SubAck]] to test subscribed QoS, since 1.1.1
-   */
-  @deprecated("this message was never able to be returned - always use [[SubAck]] to test subscribed QoS", "1.1.1")
-  final case class BadSubAckMessage(packetId: PacketId, returnCodes: Seq[ControlPacketFlags]) extends DecodeError
 
   /**
    * Something is wrong with the unsubscribe message

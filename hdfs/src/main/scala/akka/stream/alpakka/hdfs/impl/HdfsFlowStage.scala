@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.hdfs.impl
@@ -61,7 +61,7 @@ private[hdfs] final class HdfsFlowLogic[W, I, C](
   private val flushProgram = rotateOutput.flatMap(message => tryPush(Seq(message)))
 
   private[impl] val sharedScheduleFn =
-    schedulePeriodicallyWithInitialDelay(NotUsed, _: FiniteDuration, _: FiniteDuration)
+    scheduleWithFixedDelay(NotUsed, _: FiniteDuration, _: FiniteDuration)
 
   setHandlers(inlet, outlet, this)
 

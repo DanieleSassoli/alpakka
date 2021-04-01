@@ -1,30 +1,32 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.s3.impl
 
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings}
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.testkit.TestKit
 import akka.util.ByteString
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
+
 import scala.concurrent.duration._
 
 class SplitAfterSizeSpec(_system: ActorSystem)
     extends TestKit(_system)
-    with FlatSpecLike
+    with AnyFlatSpecLike
     with Matchers
     with BeforeAndAfterAll
-    with ScalaFutures {
+    with ScalaFutures
+    with LogCapturing {
 
   def this() = this(ActorSystem("SplitAfterSizeSpec"))
   implicit val defaultPatience: PatienceConfig = PatienceConfig(1.seconds, 5.millis)
-
-  implicit val materializer = ActorMaterializer(ActorMaterializerSettings(system).withDebugLogging(true))
 
   override protected def afterAll(): Unit = TestKit.shutdownActorSystem(system)
 

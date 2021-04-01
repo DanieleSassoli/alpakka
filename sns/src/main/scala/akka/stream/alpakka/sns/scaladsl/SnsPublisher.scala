@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.sns.scaladsl
@@ -44,9 +44,11 @@ object SnsPublisher {
    */
   def publishFlow(
       settings: SnsPublishSettings
-  )(implicit snsClient: SnsAsyncClient): Flow[PublishRequest, PublishResponse, NotUsed] =
+  )(implicit snsClient: SnsAsyncClient): Flow[PublishRequest, PublishResponse, NotUsed] = {
+    require(snsClient != null, "The `SnsAsyncClient` passed in may not be null.")
     Flow[PublishRequest]
       .mapAsyncUnordered(settings.concurrency)(snsClient.publish(_).toScala)
+  }
 
   /**
    * creates a [[akka.stream.scaladsl.Flow Flow]] to publish messages to SNS topics based on the message topic arn using an [[software.amazon.awssdk.services.sns.SnsAsyncClient SnsAsyncClient]]

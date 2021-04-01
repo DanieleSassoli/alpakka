@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.couchbase.impl
@@ -116,7 +116,7 @@ private[couchbase] final class CouchbaseSessionJavaAdapter(delegate: scaladsl.Co
     delegate.createIndex(indexName, ignoreIfExist, fields).toJava
 
   private def futureOptToJava[T](future: Future[Option[T]]): CompletionStage[Optional[T]] =
-    future.map(_.asJava)(ExecutionContexts.sameThreadExecutionContext).toJava
+    future.map(_.asJava)(ExecutionContexts.parasitic).toJava
 
   def listIndexes(): Source[IndexInfo, NotUsed] =
     delegate.listIndexes().asJava

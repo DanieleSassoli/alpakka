@@ -1,9 +1,9 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
-import akka.stream.alpakka.ftp.{FtpFile, FtpSettings}
+import akka.stream.alpakka.ftp.{FtpFile, FtpSettings, SftpSettings}
 
 object scalaExamples {
 
@@ -42,6 +42,21 @@ object scalaExamples {
       Ftp.fromPath(path, settings)
 
     //#retrieving
+  }
+
+  object retrievingUnconfirmedReads {
+    //#retrieving-with-unconfirmed-reads
+    import akka.stream.IOResult
+    import akka.stream.alpakka.ftp.scaladsl.Sftp
+    import akka.stream.scaladsl.Source
+    import akka.util.ByteString
+
+    import scala.concurrent.Future
+
+    def retrieveFromPath(path: String, settings: SftpSettings): Source[ByteString, Future[IOResult]] =
+      Sftp.fromPath(path, settings.withMaxUnconfirmedReads(64))
+
+    //#retrieving-with-unconfirmed-reads
   }
 
   object removing {

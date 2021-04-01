@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms
@@ -20,7 +20,7 @@ case class AckEnvelope private[jms] (message: jms.Message, private val jmsSessio
 
 case class TxEnvelope private[jms] (message: jms.Message, private val jmsSession: JmsSession) {
 
-  private[this] val commitPromise = Promise[() => Unit]
+  private[this] val commitPromise = Promise[() => Unit]()
 
   private[jms] val commitFuture: Future[() => Unit] = commitPromise.future
 

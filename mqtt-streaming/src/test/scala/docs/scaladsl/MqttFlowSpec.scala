@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
@@ -8,11 +8,13 @@ import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
+import akka.event.{Logging, LoggingAdapter}
 import akka.stream.alpakka.mqtt.streaming._
 import akka.stream.alpakka.mqtt.streaming.scaladsl.{ActorMqttClientSession, ActorMqttServerSession, Mqtt}
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, Sink, Source, SourceQueueWithComplete, Tcp}
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream._
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.testkit.TestKit
 import akka.util.ByteString
 import org.scalatest._
@@ -20,9 +22,13 @@ import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 class UntypedMqttFlowSpec
-    extends ParametrizedTestKit("untyped-flow-spec/flow", "typed-flow-spec/topic1", ActorSystem("UntypedMqttFlowSpec"))
+    extends ParametrizedTestKit("untyped-flow-spec/flow",
+                                "untyped-flow-spec/topic1",
+                                ActorSystem("UntypedMqttFlowSpec"))
     with MqttFlowSpec
 class TypedMqttFlowSpec
     extends ParametrizedTestKit("typed-flow-spec/flow",
@@ -32,13 +38,16 @@ class TypedMqttFlowSpec
 
 class ParametrizedTestKit(val clientId: String, val topic: String, system: ActorSystem) extends TestKit(system)
 
-trait MqttFlowSpec extends WordSpecLike with Matchers with BeforeAndAfterAll with ScalaFutures {
+trait MqttFlowSpec extends AnyWordSpecLike with Matchers with BeforeAndAfterAll with ScalaFutures with LogCapturing {
   self: ParametrizedTestKit =>
+
+  override def sourceActorSytem = Some(system.name)
 
   private implicit val defaultPatience: PatienceConfig = PatienceConfig(timeout = 5.seconds, interval = 100.millis)
 
-  private implicit val mat: Materializer = ActorMaterializer()
   private implicit val dispatcherExecutionContext: ExecutionContext = system.dispatcher
+
+  implicit val logAdapter: LoggingAdapter = Logging(system, this.getClass.getName)
 
   override def afterAll(): Unit =
     TestKit.shutdownActorSystem(system)
@@ -90,7 +99,10 @@ trait MqttFlowSpec extends WordSpecLike with Matchers with BeforeAndAfterAll wit
   }
 
   "mqtt server flow" should {
-    "receive a bidirectional connection and a subscription to a topic" in assertAllStagesStopped {
+    // Ignored due to ://github.com/akka/alpakka/issues/1549, possibly
+    // fixed with https://github.com/akka/alpakka/pull/2189
+    "receive a bidirectional connection and a subscription to a topic" ignore {
+
       val host = "localhost"
 
       //#create-streaming-bind-flow
@@ -125,7 +137,6 @@ trait MqttFlowSpec extends WordSpecLike with Matchers with BeforeAndAfterAll wit
                   case Right(Event(publish @ Publish(flags, _, Some(packetId), _), _))
                       if flags.contains(ControlPacketFlags.RETAIN) =>
                     queue.offer(Command(PubAck(packetId)))
-                    import mat.executionContext
                     subscribed.future.foreach(_ => session ! Command(publish))
                   case _ => // Ignore everything else
                 }
@@ -152,6 +163,7 @@ trait MqttFlowSpec extends WordSpecLike with Matchers with BeforeAndAfterAll wit
         Source
           .queue(2, OverflowStrategy.fail)
           .via(mqttFlow)
+          .log("received")
           .collect {
             case Right(Event(p: Publish, _)) => p
           }

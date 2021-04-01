@@ -1,22 +1,26 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.googlecloud.storage.impl
 
 import java.util.UUID
-
 import akka.http.scaladsl.model.ContentTypes
 import akka.stream.alpakka.googlecloud.storage.WithMaterializerGlobal
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-import org.scalatest._
+import org.scalatest.BeforeAndAfter
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Random
 import akka.stream.alpakka.googlecloud.storage.GCStorageSettings
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
+import com.github.ghik.silencer.silent
+
 import scala.concurrent.Future
 
 /**
@@ -32,11 +36,12 @@ import scala.concurrent.Future
  * - create a rewrite `alpakka-rewrite` bucket for testing
  */
 class GCStorageStreamIntegrationSpec
-    extends WordSpec
+    extends AnyWordSpec
     with WithMaterializerGlobal
     with BeforeAndAfter
     with Matchers
-    with ScalaFutures {
+    with ScalaFutures
+    with LogCapturing {
 
   private implicit val defaultPatience =
     PatienceConfig(timeout = 60.seconds, interval = 60.millis)
@@ -45,6 +50,7 @@ class GCStorageStreamIntegrationSpec
 
   def testFileName(file: String): String = folderName + file
 
+  @silent("deprecated")
   def settings: GCStorageSettings = GCStorageSettings()
 
   def bucket = "alpakka"
@@ -231,8 +237,10 @@ class GCStorageStreamIntegrationSpec
 
     "provide a sink to stream data to gcs" ignore {
       val fileName = testFileName("big-streaming-file")
+      val meta = Map("meta-key-1" -> "value-1")
+
       val sink =
-        GCStorageStream.resumableUpload(bucket, fileName, ContentTypes.`text/plain(UTF-8)`, 4 * 256 * 1024)
+        GCStorageStream.resumableUpload(bucket, fileName, ContentTypes.`text/plain(UTF-8)`, 4 * 256 * 1024, Some(meta))
 
       val res = Source
         .fromIterator(
@@ -246,6 +254,7 @@ class GCStorageStreamIntegrationSpec
       val so = res.futureValue
       so.name shouldBe fileName
       so.size shouldBe 12345670
+      so.metadata shouldBe Some(meta)
     }
 
     "rewrite file from source to destination path" ignore {

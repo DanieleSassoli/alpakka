@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.impl
@@ -156,9 +156,9 @@ private[amqp] final class AmqpRpcFlowStage(settings: AmqpWriteSettings, bufferSi
               pushMessage(queue.dequeue())
             }
 
-          override def onDownstreamFinish(): Unit = {
+          override def onDownstreamFinish(cause: Throwable): Unit = {
             setKeepGoing(true)
-            if (unackedMessages == 0) super.onDownstreamFinish()
+            if (unackedMessages == 0) super.onDownstreamFinish(cause)
           }
         }
       )

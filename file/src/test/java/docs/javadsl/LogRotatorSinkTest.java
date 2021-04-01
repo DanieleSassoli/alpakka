@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -9,16 +9,14 @@ import akka.NotUsed;
 import akka.actor.ActorSystem;
 import akka.japi.function.Creator;
 import akka.japi.function.Function;
-import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 import akka.stream.alpakka.file.javadsl.LogRotatorSink;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.*;
 import akka.stream.testkit.javadsl.StreamTestKit;
 import akka.testkit.javadsl.TestKit;
 import akka.util.ByteString;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Test;
+import org.junit.*;
 
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -34,17 +32,23 @@ import static org.junit.Assert.assertEquals;
 
 public class LogRotatorSinkTest {
 
-  private static final ActorSystem system = ActorSystem.create();
-  private static final Materializer materializer = ActorMaterializer.create(system);
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
+  private static ActorSystem system;
+
+  @BeforeClass
+  public static void beforeAll() throws Exception {
+    system = ActorSystem.create();
+  }
 
   @AfterClass
-  public static void afterAll() {
+  public static void afterAll() throws Exception {
     TestKit.shutdownActorSystem(system);
   }
 
   @After
   public void checkForStageLeaks() {
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(system));
   }
 
   @Test
@@ -72,7 +76,7 @@ public class LogRotatorSinkTest {
     CompletionStage<Done> fileSizeCompletion =
         Source.from(Arrays.asList("test1", "test2", "test3", "test4", "test5", "test6"))
             .map(ByteString::fromString)
-            .runWith(sizeRotatorSink, materializer);
+            .runWith(sizeRotatorSink, system);
 
     assertEquals(
         Done.getInstance(), fileSizeCompletion.toCompletableFuture().get(2, TimeUnit.SECONDS));
@@ -105,7 +109,7 @@ public class LogRotatorSinkTest {
     CompletionStage<Done> fileSizeCompletion =
         Source.from(Arrays.asList("test1", "test2", "test3", "test4", "test5", "test6"))
             .map(ByteString::fromString)
-            .runWith(timeBasedSink, materializer);
+            .runWith(timeBasedSink, system);
 
     assertEquals(
         Done.getInstance(), fileSizeCompletion.toCompletableFuture().get(2, TimeUnit.SECONDS));
@@ -127,7 +131,7 @@ public class LogRotatorSinkTest {
     CompletionStage<Done> completion =
         Source.from(Arrays.asList("test1", "test2", "test3", "test4", "test5", "test6"))
             .map(ByteString::fromString)
-            .runWith(LogRotatorSink.createFromFunction(triggerFunctionCreator), materializer);
+            .runWith(LogRotatorSink.createFromFunction(triggerFunctionCreator), system);
 
     // GZip compressing the data written
     CompletionStage<Done> compressedCompletion =
@@ -138,7 +142,7 @@ public class LogRotatorSinkTest {
                     Flow.of(ByteString.class)
                         .via(Compression.gzip())
                         .toMat(FileIO.toPath(path), Keep.right())),
-            materializer);
+            system);
     // #sample
 
     assertEquals(Done.getInstance(), completion.toCompletableFuture().get(2, TimeUnit.SECONDS));

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
@@ -10,13 +10,11 @@ import software.amazon.awssdk.services.lambda.LambdaAsyncClient
 
 object Examples {
 
-  //#init-mat
+  //#init-sys
   import akka.actor.ActorSystem
-  import akka.stream.{ActorMaterializer, Materializer}
 
   implicit val system: ActorSystem = ActorSystem()
-  implicit val mat: Materializer = ActorMaterializer()
-  //#init-mat
+  //#init-sys
 
   def initClient(): Unit = {
     //#init-client

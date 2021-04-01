@@ -1,11 +1,12 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.googlecloud.storage.impl
 
 import akka.stream.alpakka.googlecloud.storage.StorageObject
 import akka.annotation.InternalApi
+import akka.stream.alpakka.google.scaladsl.Paginated
 
 @InternalApi
 private[impl] final case class BucketListResult(
@@ -19,4 +20,9 @@ private[impl] final case class BucketListResult(
       source <- this.prefixes
       other <- other.prefixes
     } yield source ++ other)
+}
+
+@InternalApi
+private[impl] object BucketListResult {
+  implicit val paginated: Paginated[BucketListResult] = _.nextPageToken
 }

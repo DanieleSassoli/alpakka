@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,19 +7,13 @@ package docs.javadsl;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import org.influxdb.InfluxDB;
 import org.influxdb.dto.Query;
 import org.influxdb.dto.QueryResult;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 import akka.actor.ActorSystem;
-import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 import akka.stream.alpakka.influxdb.InfluxDbReadSettings;
 import akka.stream.alpakka.influxdb.javadsl.InfluxDbSource;
@@ -32,26 +26,16 @@ import static docs.javadsl.TestUtils.populateDatabase;
 import static docs.javadsl.TestUtils.setupConnection;
 
 public class InfluxDbSourceTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   private static ActorSystem system;
-  private static Materializer materializer;
   private static InfluxDB influxDB;
 
   private static final String DATABASE_NAME = "InfluxDbSourceTest";
 
-  private static Pair<ActorSystem, Materializer> setupMaterializer() {
-    // #init-mat
-    final ActorSystem system = ActorSystem.create();
-    final Materializer materializer = ActorMaterializer.create(system);
-    // #init-mat
-    return Pair.create(system, materializer);
-  }
-
   @BeforeClass
   public static void setupDatabase() {
-    final Pair<ActorSystem, Materializer> sysmat = setupMaterializer();
-    system = sysmat.first();
-    materializer = sysmat.second();
+    system = ActorSystem.create();
 
     influxDB = setupConnection(DATABASE_NAME);
   }
@@ -70,7 +54,7 @@ public class InfluxDbSourceTest {
   @After
   public void cleanUp() {
     cleanDatabase(influxDB, DATABASE_NAME);
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(system));
   }
 
   @Test
@@ -80,7 +64,7 @@ public class InfluxDbSourceTest {
     CompletionStage<List<InfluxDbSourceCpu>> rows =
         InfluxDbSource.typed(
                 InfluxDbSourceCpu.class, InfluxDbReadSettings.Default(), influxDB, query)
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
 
     List<InfluxDbSourceCpu> cpus = rows.toCompletableFuture().get();
 
@@ -92,7 +76,7 @@ public class InfluxDbSourceTest {
     Query query = new Query("SELECT * FROM cpu", DATABASE_NAME);
 
     CompletionStage<List<QueryResult>> completionStage =
-        InfluxDbSource.create(influxDB, query).runWith(Sink.seq(), materializer);
+        InfluxDbSource.create(influxDB, query).runWith(Sink.seq(), system);
 
     List<QueryResult> queryResults = completionStage.toCompletableFuture().get();
     QueryResult queryResult = queryResults.get(0);

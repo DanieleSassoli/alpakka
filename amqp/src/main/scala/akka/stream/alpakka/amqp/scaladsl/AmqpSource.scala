@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.scaladsl
@@ -11,7 +11,7 @@ import akka.stream.alpakka.amqp.{AmqpSourceSettings, ReadResult}
 import akka.stream.scaladsl.Source
 
 object AmqpSource {
-  private implicit val executionContext = ExecutionContexts.sameThreadExecutionContext
+  private implicit val executionContext = ExecutionContexts.parasitic
 
   /**
    * Scala API: Convenience for "at-most once delivery" semantics. Each message is acked to RabbitMQ

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.scaladsl
@@ -83,6 +83,31 @@ class AmqpFlowSpec extends AmqpSpec with AmqpMocking with BeforeAndAfterEach {
 
     "fail stage on publication error" in assertAllStagesStopped {
       shouldFailStageOnPublicationError(mockedFlowWithConfirm)
+    }
+
+    "fail stage on creating channel error" in assertAllStagesStopped {
+      new AmqpMocking {
+        def shouldFailStageOnCreatingChannelError(flow: Flow[WriteMessage, WriteResult, Future[Done]]) = {
+          val channelError = new RuntimeException("channel error")
+
+          when(
+            connectionMock.createChannel()
+          ).thenThrow(channelError)
+
+          val completion =
+            Source
+              .single("one")
+              .map(s => WriteMessage(ByteString(s)))
+              .via(flow)
+              .runWith(Sink.ignore)
+
+          completion.failed.futureValue shouldEqual channelError
+        }
+
+        val mockedFlowWithConfirm =
+          AmqpFlow.withConfirm(amqpWriteSettings(AmqpConnectionFactoryConnectionProvider(connectionFactoryMock)))
+        shouldFailStageOnCreatingChannelError(mockedFlowWithConfirm)
+      }
     }
 
     "propagate context" in assertAllStagesStopped {

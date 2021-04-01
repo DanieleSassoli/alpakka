@@ -1,20 +1,20 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.eip.scaladsl
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
-class SplitterExamples extends WordSpec with BeforeAndAfterAll with Matchers with ScalaFutures {
+class SplitterExamples extends AnyWordSpec with BeforeAndAfterAll with Matchers with ScalaFutures {
 
   implicit val system = ActorSystem("Test")
-  implicit val mat = ActorMaterializer()
 
   "Splitter" should {
     " simple split " in {

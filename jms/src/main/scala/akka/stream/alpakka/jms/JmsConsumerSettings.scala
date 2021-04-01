@@ -1,12 +1,14 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, ClassicActorSystemProvider}
 import akka.util.JavaDurationConverters._
 import com.typesafe.config.{Config, ConfigValueType}
+
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * Settings for [[akka.stream.alpakka.jms.scaladsl.JmsConsumer]] and [[akka.stream.alpakka.jms.javadsl.JmsConsumer]].
@@ -21,7 +23,10 @@ final class JmsConsumerSettings private (
     val selector: Option[String],
     val acknowledgeMode: Option[AcknowledgeMode],
     val ackTimeout: scala.concurrent.duration.Duration,
-    val failStreamOnAckTimeout: Boolean
+    val maxAckInterval: Option[scala.concurrent.duration.FiniteDuration],
+    val maxPendingAcks: Int,
+    val failStreamOnAckTimeout: Boolean,
+    val connectionStatusSubscriptionTimeout: scala.concurrent.duration.FiniteDuration
 ) extends akka.stream.alpakka.jms.JmsSettings {
 
   /** Factory to use for creating JMS connections. */
@@ -52,7 +57,7 @@ final class JmsConsumerSettings private (
    */
   def withSessionCount(value: Int): JmsConsumerSettings = copy(sessionCount = value)
 
-  /** Buffer size for maximum number for messages read from JMS when there is no demand (or acks are pending for acknowledged consumers). */
+  /** Buffer size for maximum number for messages read from JMS when there is no demand. */
   def withBufferSize(value: Int): JmsConsumerSettings = copy(bufferSize = value)
 
   /**
@@ -71,11 +76,30 @@ final class JmsConsumerSettings private (
   /** Java API: Timeout for acknowledge. (Used by TX consumers.) */
   def withAckTimeout(value: java.time.Duration): JmsConsumerSettings = copy(ackTimeout = value.asScala)
 
+  /** Max interval before sending queued acknowledges back to the broker. (Used by AckSources.) */
+  def withMaxAckInterval(value: scala.concurrent.duration.FiniteDuration): JmsConsumerSettings =
+    copy(maxAckInterval = Option(value))
+
+  /** Java API: Max interval before sending queued acknowledges back to the broker. (Used by AckSources.) */
+  def withMaxAckInterval(value: java.time.Duration): JmsConsumerSettings =
+    copy(maxAckInterval = Option(value.asScala))
+
+  /** Max number of acks queued by AckSource before they are sent to broker. (Unless MaxAckInterval is specified) */
+  def withMaxPendingAcks(value: Int): JmsConsumerSettings = copy(maxPendingAcks = value)
+
   /**
    * For use with transactions, if true the stream fails if Alpakka rolls back the transaction when `ackTimeout` is hit.
    */
   def withFailStreamOnAckTimeout(value: Boolean): JmsConsumerSettings =
     if (failStreamOnAckTimeout == value) this else copy(failStreamOnAckTimeout = value)
+
+  /** Timeout for connection status subscriber */
+  def withConnectionStatusSubscriptionTimeout(value: FiniteDuration): JmsConsumerSettings =
+    copy(connectionStatusSubscriptionTimeout = value)
+
+  /** Java API: Timeout for connection status subscriber */
+  def withConnectionStatusSubscriptionTimeout(value: java.time.Duration): JmsConsumerSettings =
+    copy(connectionStatusSubscriptionTimeout = value.asScala)
 
   private def copy(
       connectionFactory: javax.jms.ConnectionFactory = connectionFactory,
@@ -87,7 +111,11 @@ final class JmsConsumerSettings private (
       selector: Option[String] = selector,
       acknowledgeMode: Option[AcknowledgeMode] = acknowledgeMode,
       ackTimeout: scala.concurrent.duration.Duration = ackTimeout,
-      failStreamOnAckTimeout: Boolean = failStreamOnAckTimeout
+      maxAckInterval: Option[scala.concurrent.duration.FiniteDuration] = maxAckInterval,
+      maxPendingAcks: Int = maxPendingAcks,
+      failStreamOnAckTimeout: Boolean = failStreamOnAckTimeout,
+      connectionStatusSubscriptionTimeout: scala.concurrent.duration.FiniteDuration =
+        connectionStatusSubscriptionTimeout
   ): JmsConsumerSettings = new JmsConsumerSettings(
     connectionFactory = connectionFactory,
     connectionRetrySettings = connectionRetrySettings,
@@ -98,7 +126,10 @@ final class JmsConsumerSettings private (
     selector = selector,
     acknowledgeMode = acknowledgeMode,
     ackTimeout = ackTimeout,
-    failStreamOnAckTimeout = failStreamOnAckTimeout
+    maxAckInterval = maxAckInterval,
+    maxPendingAcks = maxPendingAcks,
+    failStreamOnAckTimeout = failStreamOnAckTimeout,
+    connectionStatusSubscriptionTimeout = connectionStatusSubscriptionTimeout
   )
 
   override def toString =
@@ -112,7 +143,10 @@ final class JmsConsumerSettings private (
     s"selector=$selector," +
     s"acknowledgeMode=${acknowledgeMode.map(m => AcknowledgeMode.asString(m))}," +
     s"ackTimeout=${ackTimeout.toCoarsest}," +
-    s"failStreamOnAckTimeout=$failStreamOnAckTimeout" +
+    s"maxAckInterval=${maxAckInterval.map(_.toCoarsest)}," +
+    s"maxPendingAcks=$maxPendingAcks," +
+    s"failStreamOnAckTimeout=$failStreamOnAckTimeout," +
+    s"connectionStatusSubscriptionTimeout=${connectionStatusSubscriptionTimeout.toCoarsest}" +
     ")"
 }
 
@@ -131,6 +165,7 @@ object JmsConsumerSettings {
       if (c.hasPath(path) && (c.getValue(path).valueType() != ConfigValueType.STRING || c.getString(path) != "off"))
         Some(read(c))
       else None
+
     def getStringOption(path: String): Option[String] =
       if (c.hasPath(path) && c.getString(path).nonEmpty) Some(c.getString(path)) else None
 
@@ -140,10 +175,13 @@ object JmsConsumerSettings {
     val sessionCount = c.getInt("session-count")
     val bufferSize = c.getInt("buffer-size")
     val selector = getStringOption("selector")
-    val acknowledgeMode =
-      getOption("acknowledge-mode", c => AcknowledgeMode.from(c.getString("acknowledge-mode")))
+    val acknowledgeMode = getOption("acknowledge-mode", c => AcknowledgeMode.from(c.getString("acknowledge-mode")))
     val ackTimeout = c.getDuration("ack-timeout").asScala
+    val maxAckIntervalDuration = getOption("max-ack-interval", config => config.getDuration("max-ack-interval").asScala)
+    val maxAckInterval = maxAckIntervalDuration.map(duration => FiniteDuration(duration.length, duration.unit))
+    val maxPendingAcks = c.getInt("max-pending-acks")
     val failStreamOnAckTimeout = c.getBoolean("fail-stream-on-ack-timeout")
+    val connectionStatusSubscriptionTimeout = c.getDuration("connection-status-subscription-timeout").asScala
     new JmsConsumerSettings(
       connectionFactory,
       connectionRetrySettings,
@@ -154,7 +192,10 @@ object JmsConsumerSettings {
       selector,
       acknowledgeMode,
       ackTimeout,
-      failStreamOnAckTimeout
+      maxAckInterval,
+      maxPendingAcks,
+      failStreamOnAckTimeout,
+      connectionStatusSubscriptionTimeout
     )
   }
 
@@ -166,6 +207,16 @@ object JmsConsumerSettings {
    */
   def apply(actorSystem: ActorSystem, connectionFactory: javax.jms.ConnectionFactory): JmsConsumerSettings =
     apply(actorSystem.settings.config.getConfig(configPath), connectionFactory)
+
+  /**
+   * Reads from the default config provided by the actor system at `alpakka.jms.consumer`.
+   *
+   * @param actorSystem The actor system
+   * @param connectionFactory Factory to use for creating JMS connections.
+   */
+  def apply(actorSystem: ClassicActorSystemProvider,
+            connectionFactory: javax.jms.ConnectionFactory): JmsConsumerSettings =
+    apply(actorSystem.classicSystem, connectionFactory)
 
   /**
    * Java API: Reads from the given config.
@@ -184,4 +235,14 @@ object JmsConsumerSettings {
    */
   def create(actorSystem: ActorSystem, connectionFactory: javax.jms.ConnectionFactory): JmsConsumerSettings =
     apply(actorSystem, connectionFactory)
+
+  /**
+   * Java API: Reads from the default config provided by the actor system at `alpakka.jms.consumer`.
+   *
+   * @param actorSystem The actor system
+   * @param connectionFactory Factory to use for creating JMS connections.
+   */
+  def create(actorSystem: ClassicActorSystemProvider,
+             connectionFactory: javax.jms.ConnectionFactory): JmsConsumerSettings =
+    apply(actorSystem.classicSystem, connectionFactory)
 }

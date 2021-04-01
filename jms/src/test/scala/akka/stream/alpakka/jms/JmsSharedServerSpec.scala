@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms
@@ -28,6 +28,8 @@ abstract class JmsSharedServerSpec extends JmsSpec {
       jmsBroker.stop()
     }
   }
+
+  protected def isQueueEmpty(queueName: String): Boolean = jmsBroker.service.checkQueueSize(queueName)
 
   override def withConnectionFactory()(test: ConnectionFactory => Unit): Unit = {
     test(connectionFactory)

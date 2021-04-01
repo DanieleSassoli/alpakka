@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.mqtt.scaladsl
@@ -43,6 +43,6 @@ private[scaladsl] object MqttMessageWithAck {
      *
      * @return a future indicating, if the acknowledge reached MQTT
      */
-    override def ack(): Future[Done] = FutureConverters.toScala(e.ack)
+    override def ack(): Future[Done] = FutureConverters.toScala(e.ack())
   }
 }

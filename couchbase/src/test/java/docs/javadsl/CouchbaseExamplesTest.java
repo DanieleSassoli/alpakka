@@ -1,10 +1,9 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
-import akka.Done;
 import akka.actor.ActorSystem;
 import akka.stream.Materializer;
 // #deleteWithResult
@@ -19,6 +18,7 @@ import akka.stream.alpakka.couchbase.javadsl.CouchbaseFlow;
 import akka.stream.alpakka.couchbase.javadsl.CouchbaseSource;
 import akka.stream.alpakka.couchbase.testing.CouchbaseSupportClass;
 import akka.stream.alpakka.couchbase.testing.TestObject;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.javadsl.StreamTestKit;
@@ -40,10 +40,7 @@ import com.couchbase.client.java.query.N1qlQuery;
 // #n1ql
 import com.couchbase.client.java.query.SimpleN1qlQuery;
 
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -56,7 +53,8 @@ import akka.stream.alpakka.couchbase.CouchbaseSessionRegistry;
 // #session
 import akka.stream.alpakka.couchbase.CouchbaseSessionSettings;
 import akka.stream.alpakka.couchbase.javadsl.CouchbaseSession;
-// #session #registry
+// #session
+// #registry
 import java.util.stream.Collectors;
 // #sessionFromBucket
 import com.couchbase.client.java.Bucket;
@@ -71,16 +69,21 @@ import static com.couchbase.client.java.query.dsl.Expression.*;
 import scala.concurrent.duration.FiniteDuration;
 
 import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class CouchbaseExamplesTest {
+
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   private static final CouchbaseSupportClass support = new CouchbaseSupportClass();
   private static final CouchbaseSessionSettings sessionSettings = support.sessionSettings();
   private static final String bucketName = support.bucketName();
   private static final String queryBucketName = support.queryBucketName();
   private static ActorSystem actorSystem;
-  private static Materializer materializer;
   private static TestObject sampleData;
   private static List<TestObject> sampleSequence;
 
@@ -88,7 +91,6 @@ public class CouchbaseExamplesTest {
   public static void beforeAll() {
     support.beforeAll();
     actorSystem = support.actorSystem();
-    materializer = support.mat();
     sampleData = support.sampleData();
     sampleSequence = support.sampleJavaList();
   }
@@ -100,7 +102,7 @@ public class CouchbaseExamplesTest {
 
   @After
   public void checkForStageLeaks() {
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(actorSystem));
   }
 
   @Test
@@ -185,7 +187,7 @@ public class CouchbaseExamplesTest {
     CompletionStage<List<JsonObject>> resultCompletionStage =
         CouchbaseSource.fromStatement(
                 sessionSettings, select("*").from(i(queryBucketName)).limit(10), bucketName)
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), actorSystem);
     // #statement
     List<JsonObject> jsonObjects =
         resultCompletionStage.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -202,7 +204,7 @@ public class CouchbaseExamplesTest {
 
     CompletionStage<JsonObject> resultCompletionStage =
         CouchbaseSource.fromN1qlQuery(sessionSettings, query, bucketName)
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #n1ql
     JsonObject jsonObjects = resultCompletionStage.toCompletableFuture().get(3, TimeUnit.SECONDS);
     assertEquals(4, jsonObjects.getInt("$1").intValue());
@@ -231,7 +233,7 @@ public class CouchbaseExamplesTest {
     CompletionStage<List<JsonDocument>> result =
         Source.from(ids)
             .via(CouchbaseFlow.fromId(sessionSettings, queryBucketName))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), actorSystem);
     // #fromId
 
     List<JsonDocument> jsonObjects = result.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -250,7 +252,7 @@ public class CouchbaseExamplesTest {
         Source.single(obj)
             .map(support::toJsonDocument)
             .via(CouchbaseFlow.upsert(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #upsert
 
     JsonDocument document = jsonDocumentUpsert.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -267,7 +269,7 @@ public class CouchbaseExamplesTest {
         Source.single(sampleData)
             .map(support::toStringDocument)
             .via(CouchbaseFlow.upsertDoc(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #upsertDoc
 
     StringDocument document = stringDocumentUpsert.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -284,7 +286,7 @@ public class CouchbaseExamplesTest {
         Source.from(sampleSequence)
             .map(support::toStringDocument)
             .via(CouchbaseFlow.upsertDocWithResult(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), actorSystem);
 
     List<CouchbaseWriteResult<StringDocument>> writeResults =
         upsertResults.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -313,7 +315,7 @@ public class CouchbaseExamplesTest {
         Source.single(obj)
             .map(support::toJsonDocument)
             .via(CouchbaseFlow.replace(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #replace
 
     JsonDocument document = jsonDocumentReplace.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -335,7 +337,7 @@ public class CouchbaseExamplesTest {
         Source.single(obj)
             .map(support::toJsonDocument)
             .via(CouchbaseFlow.replace(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #replace
 
     try {
@@ -359,7 +361,7 @@ public class CouchbaseExamplesTest {
         Source.single(obj)
             .map(support::toStringDocument)
             .via(CouchbaseFlow.replaceDoc(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #replaceDoc
 
     StringDocument document = stringDocumentReplace.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -386,7 +388,7 @@ public class CouchbaseExamplesTest {
         Source.from(list)
             .map(support::toStringDocument)
             .via(CouchbaseFlow.replaceDocWithResult(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), actorSystem);
 
     List<CouchbaseWriteResult<StringDocument>> writeResults =
         replaceResults.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -408,7 +410,7 @@ public class CouchbaseExamplesTest {
     CompletionStage<String> result =
         Source.single(sampleData.id())
             .via(CouchbaseFlow.delete(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #delete
 
     String id = result.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -423,7 +425,7 @@ public class CouchbaseExamplesTest {
     CompletionStage<CouchbaseDeleteResult> result =
         Source.single("non-existent")
             .via(CouchbaseFlow.deleteWithResult(sessionSettings, writeSettings, bucketName))
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), actorSystem);
     // #deleteWithResult
     CouchbaseDeleteResult deleteResult = result.toCompletableFuture().get(3, TimeUnit.SECONDS);
     assertTrue(deleteResult.isFailure());

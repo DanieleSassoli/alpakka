@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.file.impl;
@@ -219,10 +219,9 @@ public final class DirectoryChangesSource<T> extends GraphStage<SourceShape<T>> 
    *     there was no changes, if the JDK implementation is slow, it will not help lowering this
    * @param maxBufferSize Maximum number of buffered directory changes before the stage fails
    */
-  @SuppressWarnings("unchecked")
   public static Source<Pair<Path, DirectoryChange>, NotUsed> create(
       Path directoryPath, FiniteDuration pollInterval, int maxBufferSize) {
     return Source.fromGraph(
-        new DirectoryChangesSource(directoryPath, pollInterval, maxBufferSize, Pair::apply));
+        new DirectoryChangesSource<>(directoryPath, pollInterval, maxBufferSize, Pair::apply));
   }
 }

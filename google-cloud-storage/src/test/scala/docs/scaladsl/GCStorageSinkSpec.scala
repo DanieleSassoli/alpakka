@@ -1,34 +1,33 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
+import akka.http.scaladsl.model.ContentTypes
+import akka.stream.alpakka.googlecloud.storage.StorageObject
+import akka.stream.alpakka.googlecloud.storage.scaladsl.{GCStorage, GCStorageWiremockBase}
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import akka.stream.alpakka.googlecloud.storage.scaladsl.{GCStorage, GCStorageWiremockBase}
-import akka.http.scaladsl.model.ContentTypes
-import org.scalatest._
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent._
-
-import scala.util.Random
-import akka.stream.ActorMaterializer
-import akka.stream.alpakka.googlecloud.storage.StorageObject
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.Future
+import scala.util.Random
 
 class GCStorageSinkSpec
     extends GCStorageWiremockBase
-    with WordSpecLike
+    with AnyWordSpecLike
     with BeforeAndAfterAll
     with ScalaFutures
     with IntegrationPatience
-    with Matchers {
+    with Matchers
+    with LogCapturing {
 
-  implicit val materializer = ActorMaterializer()
-
-  override def beforeAll(): Unit =
-    mockTokenApi()
+  override def beforeAll(): Unit = ()
 
   override protected def afterAll(): Unit = {
     super.afterAll()
@@ -39,12 +38,16 @@ class GCStorageSinkSpec
     val chunkSize = 256 * 1024
     val firstChunkContent = Random.alphanumeric.take(chunkSize).mkString
     val secondChunkContent = Random.alphanumeric.take(chunkSize).mkString
+    val metadata = Map(Random.alphanumeric.take(5).mkString -> Random.alphanumeric.take(5).mkString)
 
-    mockLargeFileUpload(firstChunkContent, secondChunkContent, chunkSize)
+    mock.simulate(
+      mockTokenApi,
+      mockLargeFileUpload(firstChunkContent, secondChunkContent, chunkSize, Some(metadata))
+    )
 
     //#upload
     val sink =
-      GCStorage.resumableUpload(bucketName, fileName, ContentTypes.`text/plain(UTF-8)`, chunkSize)
+      GCStorage.resumableUpload(bucketName, fileName, ContentTypes.`text/plain(UTF-8)`, chunkSize, metadata)
 
     val source = Source(
       List(ByteString(firstChunkContent), ByteString(secondChunkContent))
@@ -58,14 +61,19 @@ class GCStorageSinkSpec
 
     storageObject.name shouldBe fileName
     storageObject.bucket shouldBe bucketName
+    storageObject.metadata shouldBe Some(metadata)
   }
 
-  "fail with error when large file upload fails" in {
+  // The new ResumableUpload API automatically resumes interrupted/failed uploads
+  "fail with error when large file upload fails" ignore {
     val chunkSize = 256 * 1024
     val firstChunkContent = Random.alphanumeric.take(chunkSize).mkString
     val secondChunkContent = Random.alphanumeric.take(chunkSize).mkString
 
-    mockLargeFileUploadFailure(firstChunkContent, secondChunkContent, chunkSize)
+    mock.simulate(
+      mockTokenApi,
+      mockLargeFileUploadFailure(firstChunkContent, secondChunkContent, chunkSize)
+    )
 
     val sink =
       GCStorage.resumableUpload(bucketName, fileName, ContentTypes.`text/plain(UTF-8)`, chunkSize)
@@ -81,7 +89,10 @@ class GCStorageSinkSpec
   "rewrite file" in {
     val rewriteBucketName = "alpakka-rewrite"
 
-    mockRewrite(rewriteBucketName)
+    mock.simulate(
+      mockTokenApi,
+      mockRewrite(rewriteBucketName)
+    )
 
     // #rewrite
 
@@ -98,7 +109,10 @@ class GCStorageSinkSpec
   "fail when rewrite file fails" in {
     val rewriteBucketName = "alpakka-rewrite"
 
-    mockRewriteFailure(rewriteBucketName)
+    mock.simulate(
+      mockTokenApi,
+      mockRewriteFailure(rewriteBucketName)
+    )
 
     val result = GCStorage.rewrite(bucketName, fileName, rewriteBucketName, fileName).run
 

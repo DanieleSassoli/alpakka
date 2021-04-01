@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.kinesis
@@ -35,25 +35,12 @@ final class ShardSettings private (
 
   def withStreamName(value: String): ShardSettings = copy(streamName = value)
   def withShardId(value: String): ShardSettings = copy(shardId = value)
-  def withShardIteratorType(value: ShardIteratorType): ShardSettings = copy(shardIteratorType = value)
 
-  /**
-   * Sets `shardIteratorType` to `AT_SEQUENCE_NUMBER` and uses the given value as starting sequence number.
-   */
-  def withStartingSequenceNumber(value: String): ShardSettings =
-    copy(shardIteratorType = ShardIteratorType.AT_SEQUENCE_NUMBER, startingSequenceNumber = Option(value))
-
-  /**
-   * Sets `shardIteratorType` to `AFTER_SEQUENCE_NUMBER` and uses the given value as starting sequence number.
-   */
-  def withStartingAfterSequenceNumber(value: String): ShardSettings =
-    copy(shardIteratorType = ShardIteratorType.AFTER_SEQUENCE_NUMBER, startingSequenceNumber = Option(value))
-
-  /**
-   * Sets `shardIteratorType` to `AT_TIMESTAMP` and uses the given `Instant` as starting timestamp.
-   */
-  def withAtTimestamp(value: java.time.Instant): ShardSettings =
-    copy(shardIteratorType = ShardIteratorType.AT_TIMESTAMP, atTimestamp = Option(value))
+  def withShardIterator(shardIterator: ShardIterator): ShardSettings = copy(
+    shardIteratorType = shardIterator.shardIteratorType,
+    atTimestamp = shardIterator.timestamp,
+    startingSequenceNumber = shardIterator.startingSequenceNumber
+  )
 
   /** Scala API */
   def withRefreshInterval(value: scala.concurrent.duration.FiniteDuration): ShardSettings =
@@ -99,13 +86,18 @@ object ShardSettings {
    * Create settings using the default configuration
    */
   def apply(streamName: String, shardId: String): ShardSettings =
-    new ShardSettings(streamName,
-                      shardId,
-                      ShardIteratorType.LATEST,
-                      startingSequenceNumber = None,
-                      atTimestamp = None,
-                      refreshInterval = 1.second,
-                      limit = 500)
+    apply(streamName, shardId, ShardIterator.Latest)
+
+  def apply(streamName: String, shardId: String, shardIterator: ShardIterator): ShardSettings =
+    new ShardSettings(
+      streamName,
+      shardId,
+      shardIterator.shardIteratorType,
+      startingSequenceNumber = shardIterator.startingSequenceNumber,
+      atTimestamp = shardIterator.timestamp,
+      refreshInterval = 1.second,
+      limit = 500
+    )
 
   /**
    * Java API: Create settings using the default configuration

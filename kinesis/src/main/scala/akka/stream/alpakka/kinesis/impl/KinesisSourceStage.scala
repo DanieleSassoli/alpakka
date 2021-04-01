@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.kinesis.impl
 
 import akka.actor.ActorRef
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts.sameThreadExecutionContext
+import akka.dispatch.ExecutionContexts.parasitic
 import akka.stream.alpakka.kinesis.{ShardSettings, KinesisErrors => Errors}
 import akka.stream.stage.GraphStageLogic.StageActor
 import akka.stream.stage._
@@ -54,7 +54,9 @@ private[kinesis] class KinesisSourceStage(shardSettings: ShardSettings, amazonKi
   override def shape: SourceShape[Record] = new SourceShape[Record](out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new TimerGraphStageLogic(shape) with StageLogging {
+    new TimerGraphStageLogic(shape) with StageLogging with OutHandler {
+
+      setHandler(out, this)
 
       import shardSettings._
 
@@ -67,9 +69,7 @@ private[kinesis] class KinesisSourceStage(shardSettings: ShardSettings, amazonKi
         requestShardIterator()
       }
 
-      setHandler(shape.out, new OutHandler {
-        override def onPull(): Unit = self.ref ! Pump
-      })
+      override def onPull(): Unit = self.ref ! Pump
 
       private def awaitingShardIterator(in: (ActorRef, Any)): Unit = in match {
         case (_, GetShardIteratorSuccess(result)) =>
@@ -78,8 +78,9 @@ private[kinesis] class KinesisSourceStage(shardSettings: ShardSettings, amazonKi
           requestRecords()
 
         case (_, GetShardIteratorFailure(ex)) =>
-          log.error(ex, "Failed to get a shard iterator for shard {}", shardId)
-          failStage(new Errors.GetShardIteratorError(shardId, ex))
+          val error = new Errors.GetShardIteratorError(shardId, ex)
+          log.error(ex, error.getMessage)
+          failStage(error)
 
         case (_, Pump) =>
         case (_, msg) =>
@@ -104,8 +105,9 @@ private[kinesis] class KinesisSourceStage(shardSettings: ShardSettings, amazonKi
           }
 
         case (_, GetRecordsFailure(ex)) =>
-          log.error(ex, "Failed to fetch records from Kinesis for shard {}", shardId)
-          failStage(new Errors.GetRecordsError(shardId, ex))
+          val error = new Errors.GetRecordsError(shardId, ex)
+          log.error(ex, error.getMessage)
+          failStage(error)
 
         case (_, Pump) =>
         case (_, msg) =>
@@ -142,7 +144,7 @@ private[kinesis] class KinesisSourceStage(shardSettings: ShardSettings, amazonKi
             GetRecordsRequest.builder().limit(limit).shardIterator(currentShardIterator).build()
           )
           .toScala
-          .onComplete(handleGetRecords)(sameThreadExecutionContext)
+          .onComplete(handleGetRecords)(parasitic)
 
       private[this] def requestShardIterator(): Unit = {
         val request = Function
@@ -168,7 +170,7 @@ private[kinesis] class KinesisSourceStage(shardSettings: ShardSettings, amazonKi
         amazonKinesisAsync
           .getShardIterator(request)
           .toScala
-          .onComplete(handleGetShardIterator)(sameThreadExecutionContext)
+          .onComplete(handleGetShardIterator)(parasitic)
       }
 
     }

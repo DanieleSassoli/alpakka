@@ -1,10 +1,10 @@
 # IronMQ
 
-The IronMQ connector provides an Akka stream source and sink to connect to the [IronMQ](https://www.iron.io/platform/ironmq/) queue.
+The IronMQ connector provides an Akka stream source and sink to connect to the [IronMQ](https://www.iron.io/) queue.
 
 IronMQ is a simple point-to-point queue, but it is possible to implement a fan-out semantic by configure the queue as push
 queue and set other queue as subscribers. More information about that could be found on
-[IronMQ documentation](https://www.iron.io/ironmq-fan-out-support/)
+[IronMQ documentation](https://old.iron.io/ironmq-fan-out-support/)
 
 @@project-info{ projectId="ironmq" }
 
@@ -14,6 +14,16 @@ queue and set other queue as subscribers. More information about that could be f
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-ironmq_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
+  symbol3=AkkaHttpVersion
+  value3=$akka-http.version$
+  group3=com.typesafe.akka
+  artifact3=akka-http_$scala.binary.version$
+  version3=AkkaHttpVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.

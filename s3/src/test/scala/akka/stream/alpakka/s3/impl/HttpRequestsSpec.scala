@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.s3.impl
@@ -9,20 +9,21 @@ import java.util.UUID
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.headers.{`Raw-Request-URI`, ByteRange, RawHeader}
 import akka.http.scaladsl.model._
-import akka.stream.ActorMaterializer
+import akka.http.scaladsl.model.headers.{`Raw-Request-URI`, ByteRange, RawHeader}
 import akka.stream.alpakka.s3.headers.{CannedAcl, ServerSideEncryption, StorageClass}
-import akka.stream.alpakka.s3.{ApiVersion, BufferType, MemoryBufferType, MetaHeaders, S3Headers, S3Settings}
+import akka.stream.alpakka.s3._
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.Source
 import akka.testkit.{SocketUtil, TestKit, TestProbe}
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import software.amazon.awssdk.auth.credentials._
-import software.amazon.awssdk.regions.providers._
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{FlatSpec, Matchers}
 import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.regions.providers._
 
-class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
+class HttpRequestsSpec extends AnyFlatSpec with Matchers with ScalaFutures with IntegrationPatience with LogCapturing {
 
   // test fixtures
   def getSettings(
@@ -42,7 +43,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   val contentType = MediaTypes.`image/jpeg`
   val acl = CannedAcl.PublicRead
   val metaHeaders: Map[String, String] = Map("location" -> "San Francisco", "orientation" -> "portrait")
-  val multipartUpload = MultipartUpload(S3Location("testBucket", "testKey"), "uploadId")
+  val multipartUpload = MultipartUpload(S3Location("test-bucket", "testKey"), "uploadId")
 
   it should "initiate multipart upload when the region is us-east-1" in {
     implicit val settings = getSettings()
@@ -56,7 +57,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
 
     req.entity shouldEqual HttpEntity.empty(contentType)
     req.headers should contain(RawHeader("x-amz-acl", acl.value))
-    req.uri.authority.host.toString shouldEqual "bucket.s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "bucket.s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/image-1024@2x"
 
     metaHeaders.map { m =>
@@ -76,7 +77,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
 
     req.entity shouldEqual HttpEntity.empty(contentType)
     req.headers should contain(RawHeader("x-amz-acl", acl.value))
-    req.uri.authority.host.toString shouldEqual "bucket.s3-us-east-2.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "bucket.s3.us-east-2.amazonaws.com"
     req.uri.path.toString shouldEqual "/image-1024@2x"
 
     metaHeaders.map { m =>
@@ -85,15 +86,23 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   }
 
   it should "throw an error if path-style access is false and the bucket name contains non-LDH characters" in {
-    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withPathStyleAccess(false)
+    implicit val settings = getSettings(s3Region = Region.EU_WEST_1)
 
     assertThrows[IllegalUriException](
       HttpRequests.getDownloadRequest(S3Location("invalid_bucket_name", "image-1024@2x"))
     )
   }
 
+  it should "throw an error if the key uses `..`" in {
+    implicit val settings = getSettings(s3Region = Region.EU_WEST_1)
+
+    assertThrows[IllegalUriException](
+      HttpRequests.getDownloadRequest(S3Location("validbucket", "../other-bucket/image-1024@2x"))
+    )
+  }
+
   it should "throw an error when using `..` with path-style access" in {
-    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withAccessStyle(AccessStyle.PathAccessStyle)
 
     assertThrows[IllegalUriException](
       HttpRequests.getDownloadRequest(S3Location("invalid/../bucket_name", "image-1024@2x"))
@@ -110,7 +119,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   }
 
   it should "initiate multipart upload with path-style access in region us-east-1" in {
-    implicit val settings = getSettings(s3Region = Region.US_EAST_1).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.US_EAST_1).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.initiateMultipartUploadRequest(
@@ -119,22 +128,22 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
         S3Headers().withCannedAcl(acl).withMetaHeaders(MetaHeaders(metaHeaders)).headers
       )
 
-    req.uri.authority.host.toString shouldEqual "s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/bucket/image-1024@2x"
   }
 
   it should "support download requests with path-style access in region us-east-1" in {
-    implicit val settings = getSettings(s3Region = Region.US_EAST_1).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.US_EAST_1).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req = HttpRequests.getDownloadRequest(location)
 
-    req.uri.authority.host.toString shouldEqual "s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/bucket/image-1024@2x"
     req.uri.rawQueryString shouldBe empty
   }
 
   it should "initiate multipart upload with path-style access in other regions" in {
-    implicit val settings = getSettings(s3Region = Region.US_WEST_2).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.US_WEST_2).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.initiateMultipartUploadRequest(
@@ -143,16 +152,16 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
         S3Headers().withCannedAcl(acl).withMetaHeaders(MetaHeaders(metaHeaders)).headers
       )
 
-    req.uri.authority.host.toString shouldEqual "s3-us-west-2.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "s3.us-west-2.amazonaws.com"
     req.uri.path.toString shouldEqual "/bucket/image-1024@2x"
   }
 
   it should "support download requests with path-style access in other regions" in {
-    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req = HttpRequests.getDownloadRequest(location)
 
-    req.uri.authority.host.toString shouldEqual "s3-eu-west-1.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "s3.eu-west-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/bucket/image-1024@2x"
     req.uri.rawQueryString shouldBe empty
   }
@@ -178,8 +187,21 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
 
     val req = HttpRequests.getDownloadRequest(location)
 
-    req.uri.authority.host.toString shouldEqual "bucket.s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "bucket.s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "//test/foo.txt"
+    req.uri.rawQueryString shouldBe empty
+  }
+
+  it should "support download requests with keys ending with /" in {
+    // object with a slash at the end of the filename should be accessible
+    implicit val settings = getSettings()
+
+    val location = S3Location("bucket", "/test//")
+
+    val req = HttpRequests.getDownloadRequest(location)
+
+    req.uri.authority.host.toString shouldEqual "bucket.s3.us-east-1.amazonaws.com"
+    req.uri.path.toString shouldEqual "//test//"
     req.uri.rawQueryString shouldBe empty
   }
 
@@ -190,7 +212,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
 
     val req = HttpRequests.getDownloadRequest(location)
 
-    req.uri.authority.host.toString shouldEqual "bucket.s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "bucket.s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/test%20folder/test%20file.txt"
     req.uri.rawQueryString shouldBe empty
   }
@@ -200,31 +222,31 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
 
     val location = S3Location("bucket", "test folder/1 + 2 = 3")
     val req = HttpRequests.getDownloadRequest(location)
-    req.uri.authority.host.toString shouldEqual "bucket.s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "bucket.s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/test%20folder/1%20+%202%20=%203"
     req.headers should contain(`Raw-Request-URI`("/test%20folder/1%20%2B%202%20=%203"))
   }
 
   it should "support download requests with keys containing spaces with path-style access in other regions" in {
-    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val location = S3Location("bucket", "test folder/test file.txt")
 
     val req = HttpRequests.getDownloadRequest(location)
 
-    req.uri.authority.host.toString shouldEqual "s3-eu-west-1.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "s3.eu-west-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/bucket/test%20folder/test%20file.txt"
     req.uri.rawQueryString shouldBe empty
   }
 
   it should "add versionId query parameter when provided" in {
-    implicit val settings = getSettings().withPathStyleAccess(true)
+    implicit val settings = getSettings().withAccessStyle(AccessStyle.PathAccessStyle)
 
     val location = S3Location("bucket", "test/foo.txt")
     val versionId = "123456"
     val req = HttpRequests.getDownloadRequest(location, versionId = Some(versionId))
 
-    req.uri.authority.host.toString shouldEqual "s3.amazonaws.com"
+    req.uri.authority.host.toString shouldEqual "s3.us-east-1.amazonaws.com"
     req.uri.path.toString shouldEqual "/bucket/test/foo.txt"
     req.uri.rawQueryString.fold(fail("query string is empty while it was supposed to be populated")) { rawQueryString =>
       rawQueryString shouldEqual s"versionId=$versionId"
@@ -258,7 +280,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   }
 
   it should "properly multipart upload part request with customer keys server side encryption" in {
-    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.EU_WEST_1).withAccessStyle(AccessStyle.PathAccessStyle)
     val myKey = "my-key"
     val md5Key = "md5-key"
     val s3Headers = ServerSideEncryption.customerKeys(myKey).withMd5(md5Key).headersFor(UploadPart)
@@ -328,7 +350,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   }
 
   it should "properly construct the list bucket request with no prefix, continuation token or delimiter passed" in {
-    implicit val settings = getSettings(s3Region = Region.US_EAST_2).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.US_EAST_2).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.listBucket(location.bucket)
@@ -337,7 +359,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   }
 
   it should "properly construct the list bucket request with a prefix and token passed" in {
-    implicit val settings = getSettings(s3Region = Region.US_EAST_2).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.US_EAST_2).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.listBucket(location.bucket, Some("random/prefix"), Some("randomToken"))
@@ -348,7 +370,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   }
 
   it should "properly construct the list bucket request with a delimiter and token passed" in {
-    implicit val settings = getSettings(s3Region = Region.US_EAST_2).withPathStyleAccess(true)
+    implicit val settings = getSettings(s3Region = Region.US_EAST_2).withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.listBucket(location.bucket, delimiter = Some("/"), continuationToken = Some("randomToken"))
@@ -359,7 +381,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   it should "properly construct the list bucket request when using api version 1" in {
     implicit val settings =
       getSettings(s3Region = Region.US_EAST_2, listBucketApiVersion = ApiVersion.ListBucketVersion1)
-        .withPathStyleAccess(true)
+        .withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.listBucket(location.bucket)
@@ -370,7 +392,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   it should "properly construct the list bucket request when using api version set to 1 and a continuation token" in {
     implicit val settings =
       getSettings(s3Region = Region.US_EAST_2, listBucketApiVersion = ApiVersion.ListBucketVersion1)
-        .withPathStyleAccess(true)
+        .withAccessStyle(AccessStyle.PathAccessStyle)
 
     val req =
       HttpRequests.listBucket(location.bucket, continuationToken = Some("randomToken"))
@@ -381,30 +403,30 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
   it should "support custom endpoint configured by `endpointUrl`" in {
     implicit val system: ActorSystem = ActorSystem("HttpRequestsSpec")
     import system.dispatcher
-    implicit val materializer: ActorMaterializer = ActorMaterializer()
 
-    val probe = TestProbe()
-    val address = SocketUtil.temporaryServerAddress()
+    try {
+      val probe = TestProbe()
+      val address = SocketUtil.temporaryServerAddress()
 
-    import akka.http.scaladsl.server.Directives._
+      import akka.http.scaladsl.server.Directives._
 
-    Http().bindAndHandle(extractRequestContext { ctx =>
-      probe.ref ! ctx.request
-      complete("MOCK")
-    }, address.getHostName, address.getPort)
+      Http().bindAndHandle(extractRequestContext { ctx =>
+        probe.ref ! ctx.request
+        complete("MOCK")
+      }, address.getHostName, address.getPort)
 
-    implicit val setting: S3Settings =
-      getSettings().withEndpointUrl(s"http://${address.getHostName}:${address.getPort}/")
+      implicit val setting: S3Settings =
+        getSettings().withEndpointUrl(s"http://${address.getHostName}:${address.getPort}/")
 
-    val req =
-      HttpRequests.listBucket(location.bucket, Some("random/prefix"), Some("randomToken"))
+      val req =
+        HttpRequests.listBucket(location.bucket, Some("random/prefix"), Some("randomToken"))
 
-    Http().singleRequest(req).futureValue
+      Http().singleRequest(req).futureValue shouldBe a[HttpResponse]
 
-    probe.expectMsgType[HttpRequest]
-
-    materializer.shutdown()
-    TestKit.shutdownActorSystem(system)
+      probe.expectMsgType[HttpRequest]
+    } finally {
+      TestKit.shutdownActorSystem(system)
+    }
   }
 
   it should "add two (source, range) headers to multipart upload (copy) request when byte range populated" in {
@@ -415,7 +437,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
     val multipartCopy = MultipartCopy(multipartUpload, copyPartition)
 
     val request = HttpRequests.uploadCopyPartRequest(multipartCopy)
-    request.headers should contain(RawHeader("x-amz-copy-source", "/source-bucket/some/source-key"))
+    request.headers should contain(RawHeader("x-amz-copy-source", "/source-bucket/some%2Fsource-key"))
     request.headers should contain(RawHeader("x-amz-copy-source-range", "bytes=0-5242879"))
   }
 
@@ -427,7 +449,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
     val multipartCopy = MultipartCopy(multipartUpload, copyPartition)
 
     val request = HttpRequests.uploadCopyPartRequest(multipartCopy)
-    request.headers should contain(RawHeader("x-amz-copy-source", "/source-bucket/some/source-key"))
+    request.headers should contain(RawHeader("x-amz-copy-source", "/source-bucket/some%2Fsource-key"))
     request.headers.map(_.lowercaseName()) should not contain "x-amz-copy-source-range"
   }
 
@@ -439,7 +461,9 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
     val multipartCopy = MultipartCopy(multipartUpload, copyPartition)
 
     val request = HttpRequests.uploadCopyPartRequest(multipartCopy, Some("abcdwxyz"))
-    request.headers should contain(RawHeader("x-amz-copy-source", "/source-bucket/some/source-key?versionId=abcdwxyz"))
+    request.headers should contain(
+      RawHeader("x-amz-copy-source", "/source-bucket/some%2Fsource-key?versionId=abcdwxyz")
+    )
     request.headers should contain(RawHeader("x-amz-copy-source-range", "bytes=0-5242879"))
   }
 
@@ -449,7 +473,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
     val request = HttpRequests.bucketManagementRequest(location, method = HttpMethods.PUT)
 
     //Date is added by akka by default
-    request.uri.authority.host.toString should equal("bucket.s3.amazonaws.com")
+    request.uri.authority.host.toString should equal("bucket.s3.us-east-1.amazonaws.com")
     request.entity.contentLengthOption should equal(Some(0))
     request.uri.queryString() should equal(None)
     request.method should equal(HttpMethods.PUT)
@@ -461,7 +485,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
     val request = HttpRequests.bucketManagementRequest(location, method = HttpMethods.DELETE)
 
     //Date is added by akka by default
-    request.uri.authority.host.toString should equal("bucket.s3.amazonaws.com")
+    request.uri.authority.host.toString should equal("bucket.s3.us-east-1.amazonaws.com")
     request.entity.contentLengthOption should equal(Some(0))
     request.uri.queryString() should equal(None)
     request.method should equal(HttpMethods.DELETE)
@@ -473,7 +497,7 @@ class HttpRequestsSpec extends FlatSpec with Matchers with ScalaFutures {
     val request: HttpRequest = HttpRequests.bucketManagementRequest(location, method = HttpMethods.HEAD)
 
     //Date is added by akka by default
-    request.uri.authority.host.toString should equal("bucket.s3.amazonaws.com")
+    request.uri.authority.host.toString should equal("bucket.s3.us-east-1.amazonaws.com")
     request.entity.contentLengthOption should equal(Some(0))
     request.uri.queryString() should equal(None)
     request.method should equal(HttpMethods.HEAD)

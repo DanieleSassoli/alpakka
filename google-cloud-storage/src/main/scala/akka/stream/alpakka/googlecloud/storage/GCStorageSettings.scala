@@ -1,12 +1,17 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.googlecloud.storage
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, ClassicActorSystemProvider}
 import com.typesafe.config.Config
 
+/**
+ * @deprecated Use [[akka.stream.alpakka.google.GoogleSettings]]
+ */
+@deprecated("Use akka.stream.alpakka.google.GoogleSettings", "3.0.0")
+@Deprecated
 final class GCStorageSettings private (
     val projectId: String,
     val clientEmail: String,
@@ -91,6 +96,11 @@ final class GCStorageSettings private (
     java.util.Objects.hash(projectId, clientEmail, privateKey, baseUrl, basePath, tokenUrl, tokenScope)
 }
 
+/**
+ * @deprecated Use [[akka.stream.alpakka.google.GoogleSettings]]
+ */
+@deprecated("Use akka.stream.alpakka.google.GoogleSettings", "3.0.0")
+@Deprecated
 object GCStorageSettings {
   val ConfigPath = "alpakka.google.cloud.storage"
 
@@ -170,12 +180,22 @@ object GCStorageSettings {
   )
 
   /**
+   * Scala API: Creates [[GCStorageSettings]] from the [[com.typesafe.config.Config Config]] attached to an actor system.
+   */
+  def apply()(implicit system: ClassicActorSystemProvider): GCStorageSettings = apply(system.classicSystem)
+
+  /**
    * Scala API: Creates [[GCStorageSettings]] from the [[com.typesafe.config.Config Config]] attached to an [[akka.actor.ActorSystem]].
    */
-  def apply()(implicit system: ActorSystem): GCStorageSettings = apply(system.settings.config.getConfig(ConfigPath))
+  def apply(system: ActorSystem): GCStorageSettings = apply(system.settings.config.getConfig(ConfigPath))
+
+  /**
+   * Java API: Creates [[S3Settings]] from the [[com.typesafe.config.Config Config]] attached to an actor system.
+   */
+  def create(system: ClassicActorSystemProvider): GCStorageSettings = apply(system.classicSystem)
 
   /**
    * Java API: Creates [[S3Settings]] from the [[com.typesafe.config.Config Config]] attached to an [[akka.actor.ActorSystem]].
    */
-  def create(system: ActorSystem): GCStorageSettings = apply()(system)
+  def create(system: ActorSystem): GCStorageSettings = apply(system)
 }

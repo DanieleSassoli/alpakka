@@ -10,7 +10,7 @@ Solr (pronounced "solar") is an open source enterprise search platform, written 
 
 Alpakka Solr provides Akka Stream sources and sinks for Apache Solr.
 
-For more information about Solr please visit the [Solr documentation](http://lucene.apache.org/solr/resources.html).
+For more information about Solr please visit the [Solr documentation](https://lucene.apache.org/solr/resources.html).
 
 @@project-info{ projectId="solr" }
 
@@ -20,6 +20,11 @@ For more information about Solr please visit the [Solr documentation](http://luc
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-solr_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.

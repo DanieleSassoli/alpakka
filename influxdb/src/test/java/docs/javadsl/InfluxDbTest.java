@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -17,22 +17,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import org.influxdb.InfluxDB;
 import org.influxdb.dto.Point;
 import org.influxdb.dto.Query;
 import org.influxdb.dto.QueryResult;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 import akka.stream.alpakka.influxdb.InfluxDbReadSettings;
 import akka.stream.alpakka.influxdb.InfluxDbWriteMessage;
@@ -52,20 +46,12 @@ import static docs.javadsl.TestUtils.setupConnection;
 import static org.junit.Assert.assertEquals;
 
 public class InfluxDbTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   private static ActorSystem system;
-  private static Materializer materializer;
   private static InfluxDB influxDB;
 
   private static final String DATABASE_NAME = "InfluxDbTest";
-
-  private static Pair<ActorSystem, Materializer> setupMaterializer() {
-    // #init-mat
-    final ActorSystem system = ActorSystem.create();
-    final Materializer materializer = ActorMaterializer.create(system);
-    // #init-mat
-    return Pair.create(system, materializer);
-  }
 
   public static class MessageFromKafka {
 
@@ -98,9 +84,7 @@ public class InfluxDbTest {
 
   @BeforeClass
   public static void setupDatabase() {
-    final Pair<ActorSystem, Materializer> sysmat = setupMaterializer();
-    system = sysmat.first();
-    materializer = sysmat.second();
+    system = ActorSystem.create();
 
     influxDB = setupConnection(DATABASE_NAME);
   }
@@ -119,7 +103,7 @@ public class InfluxDbTest {
   @After
   public void cleanUp() {
     cleanDatabase(influxDB, DATABASE_NAME);
-    StreamTestKit.assertAllStagesStopped(materializer);
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(system));
   }
 
   @Test
@@ -134,14 +118,14 @@ public class InfluxDbTest {
                   return InfluxDbWriteMessage.create(clonedCpu, NotUsed.notUsed());
                 })
             .groupedWithin(10, Duration.of(50l, ChronoUnit.MILLIS))
-            .runWith(InfluxDbSink.typed(InfluxDbCpu.class, influxDB), materializer);
+            .runWith(InfluxDbSink.typed(InfluxDbCpu.class, influxDB), system);
     // #run-typed
 
     Assert.assertNotNull(completionStage.toCompletableFuture().get());
 
     CompletionStage<List<Cpu>> sources =
         InfluxDbSource.typed(Cpu.class, InfluxDbReadSettings.Default(), influxDB, query)
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
 
     assertEquals(4, sources.toCompletableFuture().get().size());
   }
@@ -156,14 +140,14 @@ public class InfluxDbTest {
             .map(queryResult -> points(queryResult))
             .mapConcat(i -> i)
             .groupedWithin(10, Duration.of(50l, ChronoUnit.MILLIS))
-            .runWith(InfluxDbSink.create(influxDB), materializer);
+            .runWith(InfluxDbSink.create(influxDB), system);
     // #run-query-result
 
     Assert.assertNotNull(completionStage.toCompletableFuture().get());
 
     List<QueryResult> queryResult =
         InfluxDbSource.create(influxDB, query)
-            .runWith(Sink.seq(), materializer)
+            .runWith(Sink.seq(), system)
             .toCompletableFuture()
             .get();
     final int resultSize =
@@ -187,7 +171,7 @@ public class InfluxDbTest {
     CompletableFuture<List<List<InfluxDbWriteResult<Point, NotUsed>>>> completableFuture =
         Source.single(Collections.singletonList(influxDbWriteMessage))
             .via(InfluxDbFlow.create(influxDB))
-            .runWith(Sink.seq(), materializer)
+            .runWith(Sink.seq(), system)
             .toCompletableFuture();
     // #run-flow
 
@@ -242,7 +226,7 @@ public class InfluxDbTest {
                       });
               return NotUsed.getInstance();
             })
-        .runWith(Sink.seq(), materializer)
+        .runWith(Sink.seq(), system)
         .toCompletableFuture()
         .get(10, TimeUnit.SECONDS);
     // #kafka-example
@@ -256,7 +240,7 @@ public class InfluxDbTest {
                 influxDB,
                 new Query("SELECT*FROM cpu"))
             .map(m -> m.getHostname())
-            .runWith(Sink.seq(), materializer)
+            .runWith(Sink.seq(), system)
             .toCompletableFuture()
             .get(10, TimeUnit.SECONDS);
 

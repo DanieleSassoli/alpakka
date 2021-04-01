@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.ftp
@@ -7,13 +7,12 @@ package impl
 
 import akka.stream.impl.Stages.DefaultAttributes.IODispatcher
 import akka.stream.stage.{GraphStageWithMaterializedValue, InHandler, OutHandler}
-import akka.stream.{Attributes, IOResult, Inlet, Outlet, Shape, SinkShape, SourceShape}
+import akka.stream.{Attributes, IOOperationIncompleteException, IOResult, Inlet, Outlet, Shape, SinkShape, SourceShape}
 import akka.util.ByteString
 import akka.util.ByteString.ByteString1C
 
 import scala.concurrent.{Future, Promise}
 import java.io.{IOException, InputStream, OutputStream}
-
 import akka.annotation.InternalApi
 
 import scala.util.control.NonFatal
@@ -112,17 +111,34 @@ private[ftp] trait FtpIOSourceStage[FtpClient, S <: RemoteFileSettings]
 
       protected[this] def doPreStart(): Unit =
         isOpt = ftpLike match {
+          case ur: UnconfirmedReads =>
+            withUnconfirmedReads(ur)
           case ro: RetrieveOffset =>
             Some(ro.retrieveFileInputStream(path, handler.get.asInstanceOf[ro.Handler], offset).get)
           case _ =>
             Some(ftpLike.retrieveFileInputStream(path, handler.get).get)
         }
 
+      private def withUnconfirmedReads(
+          ftpLikeWithUnconfirmedReads: FtpLike[FtpClient, S] with UnconfirmedReads
+      ): Option[InputStream] =
+        connectionSettings match {
+          case s: SftpSettings =>
+            Some(
+              ftpLikeWithUnconfirmedReads
+                .retrieveFileInputStream(path,
+                                         handler.get.asInstanceOf[ftpLikeWithUnconfirmedReads.Handler],
+                                         offset,
+                                         s.maxUnconfirmedReads)
+                .get
+            )
+        }
+
       protected[this] def matSuccess(): Boolean =
         matValuePromise.trySuccess(IOResult.createSuccessful(readBytesTotal))
 
       protected[this] def matFailure(t: Throwable): Boolean =
-        matValuePromise.trySuccess(IOResult.createFailed(readBytesTotal, t))
+        matValuePromise.tryFailure(new IOOperationIncompleteException(readBytesTotal, t))
 
       /** BLOCKING I/O READ */
       private[this] def readChunk() = {
@@ -227,7 +243,7 @@ private[ftp] trait FtpIOSinkStage[FtpClient, S <: RemoteFileSettings]
         matValuePromise.trySuccess(IOResult.createSuccessful(writtenBytesTotal))
 
       protected[this] def matFailure(t: Throwable): Boolean =
-        matValuePromise.trySuccess(IOResult.createFailed(writtenBytesTotal, t))
+        matValuePromise.tryFailure(new IOOperationIncompleteException(writtenBytesTotal, t))
 
       /** BLOCKING I/O WRITE */
       private[this] def write(bytes: ByteString) =
@@ -259,6 +275,7 @@ private[ftp] trait FtpMoveSink[FtpClient, S <: RemoteFileSettings]
 
   def createLogicAndMaterializedValue(inheritedAttributes: Attributes) = {
     val matValuePromise = Promise[IOResult]()
+    var numberOfMovedFiles = 0
 
     val logic = new FtpGraphStageLogic[FtpFile, FtpClient, S](shape, ftpLike, connectionSettings, ftpClient) {
       {
@@ -266,9 +283,23 @@ private[ftp] trait FtpMoveSink[FtpClient, S <: RemoteFileSettings]
           in,
           new InHandler {
             override def onPush(): Unit = {
-              val sourcePath = grab(in)
-              ftpLike.move(sourcePath.path, destinationPath(sourcePath), handler.get)
-              pull(in)
+              try {
+                val sourcePath = grab(in)
+                ftpLike.move(sourcePath.path, destinationPath(sourcePath), handler.get)
+                numberOfMovedFiles = numberOfMovedFiles + 1
+                pull(in)
+              } catch {
+                case NonFatal(e) =>
+                  failed = true
+                  matFailure(e)
+                  failStage(e)
+              }
+            }
+
+            override def onUpstreamFailure(exception: Throwable): Unit = {
+              matFailure(exception)
+              failed = true
+              super.onUpstreamFailure(exception)
             }
           }
         )
@@ -277,10 +308,10 @@ private[ftp] trait FtpMoveSink[FtpClient, S <: RemoteFileSettings]
       protected[this] def doPreStart(): Unit = pull(in)
 
       protected[this] def matSuccess(): Boolean =
-        matValuePromise.trySuccess(IOResult.createSuccessful(1))
+        matValuePromise.trySuccess(IOResult.createSuccessful(numberOfMovedFiles))
 
       protected[this] def matFailure(t: Throwable): Boolean =
-        matValuePromise.trySuccess(IOResult.createFailed(1, t))
+        matValuePromise.tryFailure(t)
     } // end of stage logic
 
     (logic, matValuePromise.future)
@@ -302,23 +333,41 @@ private[ftp] trait FtpRemoveSink[FtpClient, S <: RemoteFileSettings]
 
   def createLogicAndMaterializedValue(inheritedAttributes: Attributes) = {
     val matValuePromise = Promise[IOResult]()
+    var numberOfRemovedFiles = 0
     val logic = new FtpGraphStageLogic[Unit, FtpClient, S](shape, ftpLike, connectionSettings, ftpClient) {
       {
-        setHandler(in, new InHandler {
-          override def onPush(): Unit = {
-            ftpLike.remove(grab(in).path, handler.get)
-            pull(in)
+        setHandler(
+          in,
+          new InHandler {
+            override def onPush(): Unit = {
+              try {
+                ftpLike.remove(grab(in).path, handler.get)
+                numberOfRemovedFiles = numberOfRemovedFiles + 1
+                pull(in)
+              } catch {
+                case NonFatal(e) =>
+                  failed = true
+                  matFailure(e)
+                  failStage(e)
+              }
+            }
+
+            override def onUpstreamFailure(exception: Throwable): Unit = {
+              matFailure(exception)
+              failed = true
+              super.onUpstreamFailure(exception)
+            }
           }
-        })
+        )
       }
 
       protected[this] def doPreStart(): Unit = pull(in)
 
       protected[this] def matSuccess(): Boolean =
-        matValuePromise.trySuccess(IOResult.createSuccessful(1))
+        matValuePromise.trySuccess(IOResult.createSuccessful(numberOfRemovedFiles))
 
       protected[this] def matFailure(t: Throwable): Boolean =
-        matValuePromise.trySuccess(IOResult.createFailed(1, t))
+        matValuePromise.tryFailure(t)
     } // end of stage logic
 
     (logic, matValuePromise.future)

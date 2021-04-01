@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.impl
@@ -62,7 +62,7 @@ private[amqp] final class AmqpReplyToSinkStage(settings: AmqpReplyToSinkSettings
           override def onPush(): Unit = {
             val elem = grab(in)
 
-            val replyTo = elem.properties.map(_.getReplyTo)
+            val replyTo = elem.properties.flatMap(properties => Option(properties.getReplyTo))
 
             if (replyTo.isDefined) {
               channel.basicPublish(

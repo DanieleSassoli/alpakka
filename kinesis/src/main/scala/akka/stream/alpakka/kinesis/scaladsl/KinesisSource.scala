@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.kinesis.scaladsl
@@ -17,8 +17,10 @@ object KinesisSource {
   /**
    * Read from one shard into a stream.
    */
-  def basic(shardSettings: ShardSettings, amazonKinesisAsync: KinesisAsyncClient): Source[Record, NotUsed] =
+  def basic(shardSettings: ShardSettings, amazonKinesisAsync: KinesisAsyncClient): Source[Record, NotUsed] = {
+    KinesisFlow.checkClient(amazonKinesisAsync)
     Source.fromGraph(new KinesisSourceStage(shardSettings, amazonKinesisAsync))
+  }
 
   /**
    * Read from multiple shards into a single stream.

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms
@@ -51,8 +51,6 @@ case class ConnectionRetryException(message: String, cause: Throwable) extends E
 case object RetrySkippedOnMissingConnection
     extends Exception("JmsProducer is not connected, send attempt skipped")
     with NoStackTrace
-
-final case class StopMessageListenerException() extends Exception("Stopping MessageListener.")
 
 case object JmsNotConnected extends Exception("JmsConnector is not connected") with NoStackTrace
 

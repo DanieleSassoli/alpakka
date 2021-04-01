@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, ClassicActorSystemProvider}
 import com.typesafe.config.{Config, ConfigValueType}
 
 /**
@@ -17,8 +17,7 @@ final class JmsBrowseSettings private (
     val credentials: Option[Credentials],
     val selector: Option[String],
     val acknowledgeMode: AcknowledgeMode
-) extends akka.stream.alpakka.jms.JmsSettings {
-  override val sessionCount = 1
+) {
 
   /** Factory to use for creating JMS connections. */
   def withConnectionFactory(value: javax.jms.ConnectionFactory): JmsBrowseSettings = copy(connectionFactory = value)
@@ -124,6 +123,16 @@ object JmsBrowseSettings {
     apply(actorSystem.settings.config.getConfig(configPath), connectionFactory)
 
   /**
+   * Reads from the default config provided by the actor system at `alpakka.jms.browse`.
+   *
+   * @param actorSystem The actor system
+   * @param connectionFactory Factory to use for creating JMS connections.
+   */
+  def apply(actorSystem: ClassicActorSystemProvider,
+            connectionFactory: javax.jms.ConnectionFactory): JmsBrowseSettings =
+    apply(actorSystem.classicSystem, connectionFactory)
+
+  /**
    * Java API: Reads from the default config provided by the actor system at `alpakka.jms.browse`.
    *
    * @param actorSystem The actor system
@@ -131,5 +140,15 @@ object JmsBrowseSettings {
    */
   def create(actorSystem: ActorSystem, connectionFactory: javax.jms.ConnectionFactory): JmsBrowseSettings =
     apply(actorSystem, connectionFactory)
+
+  /**
+   * Java API: Reads from the default config provided by the actor system at `alpakka.jms.browse`.
+   *
+   * @param actorSystem The actor system
+   * @param connectionFactory Factory to use for creating JMS connections.
+   */
+  def create(actorSystem: ClassicActorSystemProvider,
+             connectionFactory: javax.jms.ConnectionFactory): JmsBrowseSettings =
+    apply(actorSystem.classicSystem, connectionFactory)
 
 }

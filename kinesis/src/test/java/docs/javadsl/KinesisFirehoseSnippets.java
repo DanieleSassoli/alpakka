@@ -1,12 +1,11 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 import akka.stream.alpakka.kinesisfirehose.KinesisFirehoseFlowSettings;
 import akka.stream.alpakka.kinesisfirehose.javadsl.KinesisFirehoseFlow;
 import akka.stream.alpakka.kinesisfirehose.javadsl.KinesisFirehoseSink;
@@ -25,7 +24,6 @@ public class KinesisFirehoseSnippets {
     // #init-client
 
     final ActorSystem system = ActorSystem.create();
-    final ActorMaterializer materializer = ActorMaterializer.create(system);
 
     final software.amazon.awssdk.services.firehose.FirehoseAsyncClient amazonFirehoseAsync =
         FirehoseAsyncClient.builder()

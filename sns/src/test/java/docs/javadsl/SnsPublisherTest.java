@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.Done;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
+import akka.http.javadsl.Http;
 import akka.stream.alpakka.sns.javadsl.SnsPublisher;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.testkit.javadsl.TestKit;
@@ -24,11 +24,12 @@ import software.amazon.awssdk.services.sns.SnsAsyncClient;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 
-import static org.junit.Assert.*;
+import static org.hamcrest.MatcherAssert.*;
 import static org.hamcrest.CoreMatchers.*;
 
 import java.util.concurrent.CompletionStage;
@@ -36,9 +37,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class SnsPublisherTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   static ActorSystem system;
-  static Materializer materializer;
   static SnsAsyncClient snsClient;
   static String topicArn;
 
@@ -47,7 +48,6 @@ public class SnsPublisherTest {
   @BeforeClass
   public static void setUpBeforeClass() throws ExecutionException, InterruptedException {
     system = ActorSystem.create("SnsPublisherTest");
-    materializer = ActorMaterializer.create(system);
     snsClient = createSnsClient();
     topicArn =
         snsClient
@@ -57,8 +57,12 @@ public class SnsPublisherTest {
   }
 
   @AfterClass
-  public static void tearDownAfterClass() {
-    TestKit.shutdownActorSystem(system);
+  public static void tearDownAfterClass() throws Exception {
+    Http.get(system)
+        .shutdownAllConnectionPools()
+        .thenRun(() -> TestKit.shutdownActorSystem(system))
+        .toCompletableFuture()
+        .get(2, TimeUnit.SECONDS);
   }
 
   static SnsAsyncClient createSnsClient() {
@@ -90,7 +94,6 @@ public class SnsPublisherTest {
   void documentation() {
     // #init-system
     ActorSystem system = ActorSystem.create();
-    Materializer materializer = ActorMaterializer.create(system);
     // #init-system
   }
 
@@ -98,8 +101,7 @@ public class SnsPublisherTest {
   public void sinkShouldPublishString() throws Exception {
     CompletionStage<Done> completion =
         // #use-sink
-        Source.single("message")
-            .runWith(SnsPublisher.createSink(topicArn, snsClient), materializer);
+        Source.single("message").runWith(SnsPublisher.createSink(topicArn, snsClient), system);
 
     // #use-sink
     assertThat(completion.toCompletableFuture().get(2, TimeUnit.SECONDS), is(Done.getInstance()));
@@ -110,7 +112,7 @@ public class SnsPublisherTest {
     CompletionStage<Done> completion =
         // #use-sink
         Source.single(PublishRequest.builder().message("message").build())
-            .runWith(SnsPublisher.createPublishSink(topicArn, snsClient), materializer);
+            .runWith(SnsPublisher.createPublishSink(topicArn, snsClient), system);
 
     // #use-sink
     assertThat(completion.toCompletableFuture().get(2, TimeUnit.SECONDS), is(Done.getInstance()));
@@ -121,7 +123,7 @@ public class SnsPublisherTest {
     CompletionStage<Done> completion =
         // #use-sink
         Source.single(PublishRequest.builder().message("message").topicArn(topicArn).build())
-            .runWith(SnsPublisher.createPublishSink(snsClient), materializer);
+            .runWith(SnsPublisher.createPublishSink(snsClient), system);
     // #use-sink
     assertThat(completion.toCompletableFuture().get(2, TimeUnit.SECONDS), is(Done.getInstance()));
   }
@@ -132,7 +134,7 @@ public class SnsPublisherTest {
         // #use-flow
         Source.single("message")
             .via(SnsPublisher.createFlow(topicArn, snsClient))
-            .runWith(Sink.foreach(res -> System.out.println(res.messageId())), materializer);
+            .runWith(Sink.foreach(res -> System.out.println(res.messageId())), system);
 
     // #use-flow
     assertThat(completion.toCompletableFuture().get(2, TimeUnit.SECONDS), is(Done.getInstance()));
@@ -144,7 +146,7 @@ public class SnsPublisherTest {
         // #use-flow
         Source.single(PublishRequest.builder().message("message").build())
             .via(SnsPublisher.createPublishFlow(topicArn, snsClient))
-            .runWith(Sink.foreach(res -> System.out.println(res.messageId())), materializer);
+            .runWith(Sink.foreach(res -> System.out.println(res.messageId())), system);
 
     // #use-flow
     assertThat(completion.toCompletableFuture().get(2, TimeUnit.SECONDS), is(Done.getInstance()));
@@ -156,7 +158,7 @@ public class SnsPublisherTest {
         // #use-flow
         Source.single(PublishRequest.builder().message("message").topicArn(topicArn).build())
             .via(SnsPublisher.createPublishFlow(snsClient))
-            .runWith(Sink.foreach(res -> System.out.println(res.messageId())), materializer);
+            .runWith(Sink.foreach(res -> System.out.println(res.messageId())), system);
 
     // #use-flow
     assertThat(completion.toCompletableFuture().get(2, TimeUnit.SECONDS), is(Done.getInstance()));

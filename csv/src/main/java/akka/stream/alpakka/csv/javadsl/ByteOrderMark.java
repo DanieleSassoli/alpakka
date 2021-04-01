@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.csv.javadsl;
@@ -9,7 +9,7 @@ import akka.util.ByteString;
 /**
  * Byte Order Marks may be used to indicate the used character encoding in text files.
  *
- * @see <a href="http://www.unicode.org/faq/utf_bom.html#bom1">Unicode FAQ Byte Order Mark</a>
+ * @see <a href="https://www.unicode.org/faq/utf_bom.html#bom1">Unicode FAQ Byte Order Mark</a>
  */
 public class ByteOrderMark {
   /** Byte Order Mark for UTF-16 big-endian */

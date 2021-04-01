@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,13 +7,13 @@ package docs.javadsl;
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 import akka.stream.alpakka.orientdb.OrientDbWriteMessage;
 import akka.stream.alpakka.orientdb.OrientDbSourceSettings;
 import akka.stream.alpakka.orientdb.OrientDbWriteSettings;
 import akka.stream.alpakka.orientdb.javadsl.OrientDbFlow;
 import akka.stream.alpakka.orientdb.javadsl.OrientDbSink;
 import akka.stream.alpakka.orientdb.javadsl.OrientDbSource;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.testkit.javadsl.TestKit;
@@ -27,6 +27,7 @@ import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.object.db.OObjectDatabaseTx;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -42,12 +43,12 @@ import java.util.stream.Collectors;
 import static org.junit.Assert.assertEquals;
 
 public class OrientDbTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   private static OServerAdmin oServerAdmin;
   private static OPartitionedDatabasePool oDatabase;
   private static ODatabaseDocumentTx client;
   private static ActorSystem system;
-  private static ActorMaterializer materializer;
 
   // #init-settings
 
@@ -140,7 +141,6 @@ public class OrientDbTest {
   @BeforeClass
   public static void setup() throws Exception {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
 
     oServerAdmin = new OServerAdmin(url).connect(username, password);
     if (!oServerAdmin.existsDatabase(dbName, "plocal")) {
@@ -229,8 +229,7 @@ public class OrientDbTest {
             .map(m -> OrientDbWriteMessage.create(m.oDocument()))
             .groupedWithin(10, Duration.ofMillis(10))
             .runWith(
-                OrientDbSink.create(sinkClass1, OrientDbWriteSettings.create(oDatabase)),
-                materializer);
+                OrientDbSink.create(sinkClass1, OrientDbWriteSettings.create(oDatabase)), system);
 
     f1.toCompletableFuture().get(10, TimeUnit.SECONDS);
 
@@ -238,7 +237,7 @@ public class OrientDbTest {
     CompletionStage<List<String>> result =
         OrientDbSource.create(sinkClass1, OrientDbSourceSettings.create(oDatabase))
             .map(m -> m.oDocument().<String>field("book_title"))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     // #run-odocument
 
     List<String> res = new ArrayList<>(result.toCompletableFuture().get(10, TimeUnit.SECONDS));
@@ -277,7 +276,7 @@ public class OrientDbTest {
             .runWith(
                 OrientDbSink.typed(
                     sinkClass2, OrientDbWriteSettings.create(oDatabase), sink2.class),
-                materializer);
+                system);
     // #run-typed
 
     f1.toCompletableFuture().get(10, TimeUnit.SECONDS);
@@ -292,7 +291,7 @@ public class OrientDbTest {
                   ODatabaseRecordThreadLocal.instance().set(db);
                   return m.oDocument().getBook_title();
                 })
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
 
     List<String> result = new ArrayList<>(f2.toCompletableFuture().get(10, TimeUnit.SECONDS));
 
@@ -346,14 +345,10 @@ public class OrientDbTest {
               ODatabaseDocumentTx db = oDatabase.acquire();
               db.setDatabaseOwner(new OObjectDatabaseTx(db));
               ODatabaseRecordThreadLocal.instance().set(db);
-              messages.stream()
-                  .forEach(
-                      message -> {
-                        commitToKafka.accept(((KafkaOffset) message.passThrough()));
-                      });
+              messages.stream().forEach(message -> commitToKafka.accept(message.passThrough()));
               return NotUsed.getInstance();
             })
-        .runWith(Sink.seq(), materializer)
+        .runWith(Sink.seq(), system)
         .toCompletableFuture()
         .get(10, TimeUnit.SECONDS);
     // #kafka-example
@@ -363,7 +358,7 @@ public class OrientDbTest {
     List<Object> result2 =
         OrientDbSource.create(sink6, OrientDbSourceSettings.create(oDatabase), null)
             .map(m -> m.oDocument().field("book_title"))
-            .runWith(Sink.seq(), materializer)
+            .runWith(Sink.seq(), system)
             .toCompletableFuture()
             .get(10, TimeUnit.SECONDS);
 
@@ -384,7 +379,7 @@ public class OrientDbTest {
             .map(m -> OrientDbWriteMessage.create(m.oDocument()))
             .groupedWithin(10, Duration.ofMillis(10))
             .via(OrientDbFlow.create(sink3, OrientDbWriteSettings.create(oDatabase)))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     // #run-flow
 
     f1.toCompletableFuture().get(10, TimeUnit.SECONDS);
@@ -393,7 +388,7 @@ public class OrientDbTest {
     CompletionStage<List<String>> f2 =
         OrientDbSource.create(sink3, OrientDbSourceSettings.create(oDatabase), null)
             .map(m -> m.oDocument().<String>field("book_title"))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
 
     List<String> result2 = new ArrayList<>(f2.toCompletableFuture().get(10, TimeUnit.SECONDS));
 

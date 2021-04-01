@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.file.javadsl;
@@ -77,23 +77,6 @@ public final class FileTailSource {
     return create(path, maxLineSize, 0, pollingInterval)
         .via(Framing.delimiter(ByteString.fromString(lf, charset.name()), maxLineSize))
         .map(bytes -> bytes.decodeString(charset));
-  }
-
-  /**
-   * Same as {@link #createLines(Path, int, java.time.Duration, String, Charset)} but using the OS
-   * default line separator and UTF-8 for charset
-   *
-   * @deprecated (since 2.0.0) use method with `java.time.Duration` instead
-   */
-  @Deprecated
-  public static Source<String, NotUsed> createLines(
-      Path path, int maxChunkSize, FiniteDuration pollingInterval) {
-    return createLines(
-        path,
-        maxChunkSize,
-        java.time.Duration.ofNanos(pollingInterval.toNanos()),
-        System.getProperty("line.separator"),
-        StandardCharsets.UTF_8);
   }
 
   /**

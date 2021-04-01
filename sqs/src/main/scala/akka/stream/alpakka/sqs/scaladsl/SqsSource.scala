@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.sqs.scaladsl
@@ -26,7 +26,8 @@ object SqsSource {
   def apply(
       queueUrl: String,
       settings: SqsSourceSettings = SqsSourceSettings.Defaults
-  )(implicit sqsClient: SqsAsyncClient): Source[Message, NotUsed] =
+  )(implicit sqsClient: SqsAsyncClient): Source[Message, NotUsed] = {
+    SqsAckFlow.checkClient(sqsClient)
     Source
       .repeat {
         val requestBuilder =
@@ -48,6 +49,7 @@ object SqsSource {
       .takeWhile(messages => !settings.closeOnEmptyReceive || messages.nonEmpty)
       .mapConcat(identity)
       .buffer(settings.maxBufferSize, OverflowStrategy.backpressure)
+  }
 
   private def resolveHandler(parallelism: Int)(implicit sqsClient: SqsAsyncClient) =
     if (parallelism == 1) {

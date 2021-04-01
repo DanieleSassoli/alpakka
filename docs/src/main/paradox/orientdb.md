@@ -4,7 +4,7 @@
 
 OrientDB is a multi-model database, supporting graph, document, key/value, and object models, but the relationships are managed as in graph databases with direct connections between records. It supports schema-less, schema-full and schema-mixed modes. It has a strong security profiling system based on users and roles and supports querying with Gremlin along with SQL extended for graph traversal.
 
-For more information about OrientDB please visit the [official documentation](http://orientdb.com/orientdb/), more details are available in [the OrientDB manual](http://orientdb.com/docs/3.0.x/).
+For more information about OrientDB please visit the [official documentation](https://orientdb.org/), more details are available in [the OrientDB manual](https://orientdb.org/docs/3.0.x/).
 
 @@@
 
@@ -20,6 +20,11 @@ The Alpakka OrientDB connector provides Akka Stream sources and sinks for Orient
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-orientdb_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.

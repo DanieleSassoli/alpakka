@@ -1,11 +1,11 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.kinesisfirehose.scaladsl
 
 import akka.NotUsed
-import akka.dispatch.ExecutionContexts.sameThreadExecutionContext
+import akka.dispatch.ExecutionContexts.parasitic
 import akka.stream.ThrottleMode
 import akka.stream.alpakka.kinesisfirehose.KinesisFirehoseFlowSettings
 import akka.stream.alpakka.kinesisfirehose.KinesisFirehoseErrors.FailurePublishingRecords
@@ -38,7 +38,7 @@ object KinesisFirehoseFlow {
                 .build()
             )
             .toScala
-            .transform(identity, FailurePublishingRecords(_))(sameThreadExecutionContext)
+            .transform(identity, FailurePublishingRecords(_))(parasitic)
       )
       .mapConcat(_.requestResponses.asScala.toIndexedSeq)
 

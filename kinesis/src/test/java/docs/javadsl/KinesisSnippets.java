@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
 import akka.stream.alpakka.kinesis.KinesisFlowSettings;
+import akka.stream.alpakka.kinesis.ShardIterators;
 import akka.stream.alpakka.kinesis.ShardSettings;
 import akka.stream.alpakka.kinesis.javadsl.KinesisFlow;
 import akka.stream.alpakka.kinesis.javadsl.KinesisSink;
@@ -24,7 +24,6 @@ import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsResultEntry;
 import software.amazon.awssdk.services.kinesis.model.Record;
 // #source-settings
-import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 // #source-settings
 
 import java.time.Duration;
@@ -37,7 +36,6 @@ public class KinesisSnippets {
     // #init-client
 
     final ActorSystem system = ActorSystem.create();
-    final ActorMaterializer materializer = ActorMaterializer.create(system);
 
     final software.amazon.awssdk.services.kinesis.KinesisAsyncClient amazonKinesisAsync =
         KinesisAsyncClient.builder()
@@ -51,12 +49,11 @@ public class KinesisSnippets {
     // #init-client
 
     // #source-settings
-
     final ShardSettings settings =
         ShardSettings.create("streamName", "shard-id")
             .withRefreshInterval(Duration.ofSeconds(1))
             .withLimit(500)
-            .withShardIteratorType(ShardIteratorType.TRIM_HORIZON);
+            .withShardIterator(ShardIterators.trimHorizon());
     // #source-settings
 
     // #source-single

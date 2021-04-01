@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.dynamodb.javadsl
@@ -7,6 +7,8 @@ package akka.stream.alpakka.dynamodb.javadsl
 import java.util.concurrent.CompletionStage
 
 import akka.NotUsed
+import akka.actor.ClassicActorSystemProvider
+import akka.annotation.ApiMayChange
 import akka.stream.Materializer
 import akka.stream.alpakka.dynamodb.{scaladsl, DynamoDbOp, DynamoDbPaginatedOp}
 import akka.stream.javadsl.{Flow, FlowWithContext, Sink, Source}
@@ -41,6 +43,7 @@ object DynamoDb {
    * @param parallelism maximum number of in-flight requests at any given time
    * @tparam Ctx context (or pass-through)
    */
+  @ApiMayChange(issue = "https://github.com/akka/alpakka/issues/1987")
   def flowWithContext[In <: DynamoDbRequest, Out <: DynamoDbResponse, Ctx](
       client: DynamoDbAsyncClient,
       operation: DynamoDbOp[In, Out],
@@ -72,13 +75,26 @@ object DynamoDb {
 
   /**
    * Create a CompletionStage that will be completed with a response to a given request.
+   * @deprecated pass in the actor system instead of the materializer, since 3.0.0
    */
+  @deprecated("pass in the actor system instead of the materializer", "3.0.0")
   def single[In <: DynamoDbRequest, Out <: DynamoDbResponse](client: DynamoDbAsyncClient,
                                                              operation: DynamoDbOp[In, Out],
                                                              request: In,
-                                                             mat: Materializer): CompletionStage[Out] = {
+                                                             mat: Materializer): CompletionStage[Out] =
+    single(client, operation, request, mat.system)
+
+  /**
+   * Create a CompletionStage that will be completed with a response to a given request.
+   */
+  def single[In <: DynamoDbRequest, Out <: DynamoDbResponse](
+      client: DynamoDbAsyncClient,
+      operation: DynamoDbOp[In, Out],
+      request: In,
+      system: ClassicActorSystemProvider
+  ): CompletionStage[Out] = {
     val sink: Sink[Out, CompletionStage[Out]] = Sink.head()
-    Source.single(request).via(flow(client, operation, 1)).runWith(sink, mat)
+    Source.single(request).via(flow(client, operation, 1)).runWith(sink, system)
   }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.mqtt.streaming
@@ -30,27 +30,6 @@ object Mqtt {
   ): BidiFlow[Command[A], ByteString, ByteString, Either[MqttCodec.DecodeError, Event[A]], NotUsed] =
     BidiFlow
       .fromFlows(session.commandFlow[A](connectionId), session.eventFlow[A](connectionId))
-      .atop(
-        BidiFlow.fromGraph(
-          new CoupledTerminationBidi
-        )
-      )
-
-  /**
-   * Create a bidirectional flow that maintains client session state with an MQTT endpoint.
-   * The bidirectional flow can be joined with an endpoint flow that receives
-   * [[ByteString]] payloads and independently produces [[ByteString]] payloads e.g.
-   * an MQTT server.
-   *
-   * @param session the MQTT client session to use
-   * @return the bidirectional flow
-   */
-  @deprecated("Provide a connectionId instead", "1.0.1")
-  def clientSessionFlow[A](
-      session: MqttClientSession
-  ): BidiFlow[Command[A], ByteString, ByteString, Either[MqttCodec.DecodeError, Event[A]], NotUsed] =
-    BidiFlow
-      .fromFlows(session.commandFlow[A](ByteString("0")), session.eventFlow[A](ByteString("0")))
       .atop(
         BidiFlow.fromGraph(
           new CoupledTerminationBidi

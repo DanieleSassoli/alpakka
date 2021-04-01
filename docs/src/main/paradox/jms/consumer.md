@@ -12,11 +12,11 @@ The JMS message model supports several types of message bodies in (see @javadoc[
 
 ## Receiving messages
 
-@java[@scaladoc[JmsConsumer](akka.stream.alpakka.jms.javadsl.JmsConsumer$)]@scala[@scaladoc[JmsConsumer](akka.stream.alpakka.jms.scaladsl.JmsConsumer$)] offers factory methods to consume JMS messages in a number of ways.
+@apidoc[JmsConsumer$] offers factory methods to consume JMS messages in a number of ways.
 
 This examples shows how to listen to a JMS queue and emit @javadoc[javax.jms.Message](javax.jms.Message) elements into the stream.
 
-The materialized value `JmsConsumerControl` is used to shut down the consumer (it is a @scaladoc[Killswitch](akka.stream.KillSwitch)) and offers the possibility to inspect the connectivity state of the consumer. 
+The materialized value @apidoc[JmsConsumerControl] is used to shut down the consumer (it is a @apidoc[KillSwitch]) and offers the possibility to inspect the connectivity state of the consumer. 
 
 Scala
 : @@snip [snip](/jms/src/test/scala/docs/scaladsl/JmsConnectorsSpec.scala) { #jms-source }
@@ -38,7 +38,7 @@ Java
 
 The created @javadoc[ConnectionFactory](javax.jms.ConnectionFactory) is then used for the creation of the different JMS sources.
 
-The `JmsConsumerSettings` factories allow for passing the actor system to read from the default `alpakka.jms.consumer` section, or you may pass a `Config` instance which is resolved to a section of the same structure. 
+The @apidoc[JmsConsumerSettings$] factories allow for passing the actor system to read from the default `alpakka.jms.consumer` section, or you may pass a `Config` instance which is resolved to a section of the same structure. 
 
 Scala
 : @@snip [snip](/jms/src/test/scala/docs/scaladsl/JmsSettingsSpec.scala) { #consumer-settings }
@@ -58,7 +58,10 @@ connectionRetrySettings | Retry characteristics if the connection failed to be e
 sessionCount            | Number of parallel sessions to use for receiving JMS messages.       | defaults to `1`     |
 bufferSize              | Maximum number of messages to prefetch before applying backpressure. | 100                 |
 ackTimeout              | For use with JMS transactions, only: maximum time given to a message to be committed or rolled back. | 1 second  |
+maxAckInterval          | For use with AckSource, only: The max duration before the queued acks are sent to the broker | Empty               |
+maxPendingAcks          | For use with AckSource, only: The amount of acks that get queued before being sent to the broker | 100               |
 selector                | JMS selector expression (see [below](#using-jms-selectors))          | Empty               |
+connectionStatusSubscriptionTimeout | 5 seconds | Time to wait for subscriber of connection status events before starting to discard them |
 
 reference.conf
 : @@snip [snip](/jms/src/main/resources/reference.conf) { #consumer }
@@ -93,6 +96,7 @@ The `sessionCount` parameter controls the number of JMS sessions to run in paral
 *  Using multiple sessions increases throughput, especially if acknowledging message by message is desired.
 *  Messages may arrive out of order if `sessionCount` is larger than 1.
 *  Message-by-message acknowledgement can be achieved by setting `bufferSize` to 0, thus disabling buffering. The outstanding messages before backpressure will be the `sessionCount`.
+*  If buffering is enabled then it's possible for messages to remain in the buffer and never be acknowledged (or acknowledged after a long time) when no new elements arrive to reach the `maxPendingAcks` threshold. By setting `maxAckInterval` messages will be acknowledged after the defined interval or number of pending acks, whichever comes first. 
 *  The default `AcknowledgeMode` is `ClientAcknowledge` but can be overridden to custom `AcknowledgeMode`s, even implementation-specific ones by setting the `AcknowledgeMode` in the `JmsConsumerSettings` when creating the stream.
 
 @@@ warning
@@ -141,12 +145,12 @@ Java
 
 ## Raw JVM type sources
 
-| Stream element type                                   | Alpakka source factory   |
-|-------------------------------------------------------|--------------------------|
-| String                                                | [`JmsConsumer.textSource`](#text-sources)   |
-| @scala[Array[Byte]]@java[byte[]]                      | [`JmsConsumer.bytesSource`](#byte-array-sources)  |
-| @scala[Map[String, AnyRef]]@java[Map<String, Object>] | [`JmsConsumer.mapSource`](#map-messages-sources)  |
-| Object (`java.io.Serializable`)                       | [`JmsConsumer.objectSource`](#object-sources)     |
+| Stream element type                                       | Alpakka source factory   |
+|-----------------------------------------------------------|--------------------------|
+| `String`                                                  | [`JmsConsumer.textSource`](#text-sources)         |
+| @scala[`Array[Byte]`]@java[`byte[]`]                      | [`JmsConsumer.bytesSource`](#byte-array-sources)  |
+| @scala[`Map[String, AnyRef]`]@java[`Map<String, Object>`] | [`JmsConsumer.mapSource`](#map-messages-sources)  |
+| `Object` (`java.io.Serializable`)                         | [`JmsConsumer.objectSource`](#object-sources)     |
 
 ### Text sources
 
@@ -183,7 +187,7 @@ Java
 
 ### Object sources
 
-The `objectSource` emits the received message body as deserialized JVM instance. As serialization may be a security concern, JMS clients require special configuration to allow this. The example shows how to configure ActiveMQ connection factory to support serialization. See [ActiveMQ Security](http://activemq.apache.org/objectmessage.html) for more information on this.
+The `objectSource` emits the received message body as deserialized JVM instance. As serialization may be a security concern, JMS clients require special configuration to allow this. The example shows how to configure ActiveMQ connection factory to support serialization. See [ActiveMQ Security](https://activemq.apache.org/objectmessage.html) for more information on this.
 
 Scala
 : @@snip [snip](/jms/src/test/scala/docs/scaladsl/JmsConnectorsSpec.scala) { #object-source }
@@ -194,8 +198,8 @@ Java
 
 ## Request / Reply
 
-The request / reply pattern can be implemented by streaming a @java[@scaladoc[JmsConsumer](akka.stream.alpakka.jms.javadsl.JmsConsumer$)]@scala[@scaladoc[JmsConsumer](akka.stream.alpakka.jms.scaladsl.JmsConsumer$)]
-to a @java[@scaladoc[JmsProducer](akka.stream.alpakka.jms.javadsl.JmsProducer$)]@scala[@scaladoc[JmsProducer](akka.stream.alpakka.jms.scaladsl.JmsProducer$)],
+The request / reply pattern can be implemented by streaming a @apidoc[JmsConsumer$]
+to a @apidoc[JmsProducer$],
 with a stage in between that extracts the `ReplyTo` and `CorrelationID` from the original message and adds them to the response.
 
 Scala

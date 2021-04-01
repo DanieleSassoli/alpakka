@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.avroparquet.javadsl
@@ -11,6 +11,6 @@ import org.apache.parquet.hadoop.ParquetReader
 
 object AvroParquetSource {
 
-  def create(reader: ParquetReader[GenericRecord]): Source[GenericRecord, NotUsed] =
+  def create[T <: GenericRecord](reader: ParquetReader[T]): Source[T, NotUsed] =
     Source.fromGraph(new akka.stream.alpakka.avroparquet.impl.AvroParquetSource(reader))
 }

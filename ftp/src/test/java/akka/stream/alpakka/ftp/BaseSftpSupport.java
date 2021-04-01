@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.ftp;
@@ -14,7 +14,6 @@ public class BaseSftpSupport extends BaseSupportImpl {
   private final Path ROOT_DIR = Paths.get("tmp/home");
   final String HOSTNAME = "localhost";
   final int PORT = 2222;
-  final FtpCredentials CREDENTIALS = FtpCredentials.create("username", "userpass");
   // Issue: the root folder of the sftp server is not writable so tests must happen inside a
   // sub-folder
   final String ROOT_PATH = "upload/";

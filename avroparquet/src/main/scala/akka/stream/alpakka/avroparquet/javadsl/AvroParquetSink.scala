@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.avroparquet.javadsl
@@ -12,9 +12,9 @@ import org.apache.parquet.hadoop.ParquetWriter
 
 object AvroParquetSink {
 
-  def create(writer: ParquetWriter[GenericRecord]): Sink[GenericRecord, CompletionStage[Done]] =
+  def create[T <: GenericRecord](writer: ParquetWriter[T]): Sink[T, CompletionStage[Done]] =
     Flow
-      .fromGraph(new akka.stream.alpakka.avroparquet.impl.AvroParquetFlow(writer: ParquetWriter[GenericRecord]))
+      .fromGraph(new akka.stream.alpakka.avroparquet.impl.AvroParquetFlow(writer: ParquetWriter[T]))
       .toMat(Sink.ignore(), Keep.right[NotUsed, CompletionStage[Done]])
 
 }

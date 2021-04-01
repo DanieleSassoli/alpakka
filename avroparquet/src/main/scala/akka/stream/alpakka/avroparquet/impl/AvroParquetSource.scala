@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.avroparquet.impl
@@ -13,10 +13,10 @@ import org.apache.parquet.hadoop.ParquetReader
  * Internal API
  */
 @InternalApi
-private[avroparquet] class AvroParquetSource(reader: ParquetReader[GenericRecord])
-    extends GraphStage[SourceShape[GenericRecord]] {
+private[avroparquet] class AvroParquetSource[T <: GenericRecord](reader: ParquetReader[T])
+    extends GraphStage[SourceShape[T]] {
 
-  val out: Outlet[GenericRecord] = Outlet("AvroParquetSource")
+  val out: Outlet[T] = Outlet("AvroParquetSource")
 
   override protected def initialAttributes: Attributes =
     super.initialAttributes and ActorAttributes.IODispatcher
@@ -44,5 +44,5 @@ private[avroparquet] class AvroParquetSource(reader: ParquetReader[GenericRecord
     override def postStop(): Unit = reader.close()
 
   }
-  override def shape: SourceShape[GenericRecord] = SourceShape.of(out)
+  override def shape: SourceShape[T] = SourceShape.of(out)
 }

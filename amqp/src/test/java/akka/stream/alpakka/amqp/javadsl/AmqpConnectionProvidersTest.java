@@ -1,21 +1,29 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.javadsl;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.junit.Assert.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-import akka.japi.Pair;
 import akka.stream.alpakka.amqp.*;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.net.ConnectException;
 
 public class AmqpConnectionProvidersTest {
+
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   @Test
   public void LocalAmqpConnectionCreatesNewConnection() throws Exception {
     AmqpConnectionProvider connectionProvider = AmqpLocalConnectionProvider.getInstance();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.javadsl;
@@ -10,14 +10,14 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import akka.Done;
 import akka.actor.ActorSystem;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
 import akka.stream.alpakka.amqp.AmqpLocalConnectionProvider;
 import akka.stream.alpakka.amqp.AmqpWriteSettings;
 import akka.stream.alpakka.amqp.QueueDeclaration;
@@ -35,13 +35,13 @@ import scala.collection.JavaConverters;
 /** Needs a local running AMQP server on the default port with no password. */
 public class AmqpFlowTest {
 
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static ActorSystem system;
-  private static Materializer materializer;
 
   @BeforeClass
   public static void setup() {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
   }
 
   private static AmqpWriteSettings settings() {
@@ -82,7 +82,7 @@ public class AmqpFlowTest {
             .map(s -> WriteMessage.create(ByteString.fromString(s)))
             .via(flow)
             .toMat(TestSink.probe(system), Keep.right())
-            .run(materializer);
+            .run(system);
 
     result
         .request(input.size())
@@ -116,7 +116,7 @@ public class AmqpFlowTest {
             .via(flowWithContext)
             .asSource()
             .toMat(TestSink.probe(system), Keep.right())
-            .run(materializer);
+            .run(system);
 
     result
         .request(input.size())
@@ -139,7 +139,7 @@ public class AmqpFlowTest {
             .map(s -> Pair.create(WriteMessage.create(ByteString.fromString(s)), s))
             .via(flow)
             .toMat(TestSink.probe(system), Keep.right())
-            .run(materializer);
+            .run(system);
 
     result
         .request(input.size())

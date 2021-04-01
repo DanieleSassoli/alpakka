@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.s3.scaladsl
@@ -11,12 +11,13 @@ import akka.stream.alpakka.s3.impl.S3Stream
 import akka.stream.alpakka.s3.scaladsl.S3WireMockBase._
 import akka.testkit.TestKit
 import com.github.tomakehurst.wiremock.WireMockServer
-import com.github.tomakehurst.wiremock.client.WireMock
+import com.github.tomakehurst.wiremock.client.{ResponseDefinitionBuilder, WireMock}
 import com.github.tomakehurst.wiremock.client.WireMock._
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration._
+import com.github.tomakehurst.wiremock.http.Fault
 import com.github.tomakehurst.wiremock.matching.{ContainsPattern, EqualToPattern}
 import com.github.tomakehurst.wiremock.stubbing.Scenario
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import software.amazon.awssdk.regions.Region
 
 abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMockServer) extends TestKit(_system) {
@@ -44,33 +45,6 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
       )
     )
 
-  def mockFailureAfterInitiate(): Unit = {
-    mock
-      .register(
-        post(urlEqualTo(s"/$bucketKey?uploads")).willReturn(
-          aResponse()
-            .withStatus(200)
-            .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
-            .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
-            .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                 |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-                 |  <Bucket>$bucket</Bucket>
-                 |  <Key>$bucketKey</Key>
-                 |  <UploadId>$uploadId</UploadId>
-                 |</InitiateMultipartUploadResult>""".stripMargin)
-        )
-      )
-
-    mock.register(
-      put(urlEqualTo(s"/$bucketKey?partNumber=1&uploadId=$uploadId"))
-        .withRequestBody(matching(body))
-        .willReturn(
-          aResponse()
-            .withStatus(500)
-        )
-    )
-  }
-
   def mockSSEInvalidRequest(): Unit =
     mock.register(
       any(anyUrl()).willReturn(
@@ -90,14 +64,14 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
   val body = "<response>Some content</response>"
   val bodySSE = "<response>Some other content</response>"
   val bucketKey = "testKey"
-  val bucket = "testBucket"
-  val targetBucket = "testTargetBucket"
+  val bucket = "test-bucket"
+  val targetBucket = "test-target-bucket"
   val targetBucketKey = "testTargetKey"
   val uploadId = "VXBsb2FkIElEIGZvciA2aWWpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA"
   val etag = "5b27a21a97fcf8a7004dd1d906e7a5ba"
   val etagSSE = "5b27a21a97fcf8a7004dd1d906e7a5cd"
-  val url = s"http://testbucket.s3.amazonaws.com/testKey"
-  val targetUrl = s"http://$targetBucket.s3.amazonaws.com/$targetBucketKey"
+  val url = s"http://testbucket.s3.us-east-1.amazonaws.com/testKey"
+  val targetUrl = s"http://$targetBucket.s3.us-east-1.amazonaws.com/$targetBucketKey"
   val (bytesRangeStart, bytesRangeEnd) = (2, 10)
   val rangeOfBody = body.getBytes.slice(bytesRangeStart, bytesRangeEnd + 1)
   val rangeOfBodySSE = bodySSE.getBytes.slice(bytesRangeStart, bytesRangeEnd + 1)
@@ -239,7 +213,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withStatus(200)
             .withHeader("Content-Type", "application/xml")
             .withBody(s"""|<?xml version="1.0" encoding="UTF-8"?>
-                        |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                        |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                         |    <Name>bucket</Name>
                         |    <Prefix>$listPrefix</Prefix>
                         |    <KeyCount>1</KeyCount>
@@ -264,7 +238,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withStatus(200)
             .withHeader("Content-Type", "application/xml")
             .withBody(s"""|<?xml version="1.0" encoding="UTF-8"?>
-                        |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                        |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                         |    <Name>bucket</Name>
                         |    <Prefix>$listPrefix</Prefix>
                         |    <Marker/>
@@ -289,7 +263,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withStatus(200)
             .withHeader("Content-Type", "application/xml")
             .withBody(s"""|<?xml version="1.0" encoding="UTF-8"?>
-                          |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                          |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                           |    <Name>bucket</Name>
                           |    <Prefix>$listPrefix</Prefix>
                           |    <KeyCount>1</KeyCount>
@@ -317,7 +291,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withStatus(200)
             .withHeader("Content-Type", "application/xml")
             .withBody(s"""|<?xml version="1.0" encoding="UTF-8"?>
-                          |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                          |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                           |    <Name>bucket</Name>
                           |    <Prefix>$listPrefix</Prefix>
                           |    <Marker/>
@@ -338,7 +312,16 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
       )
 
   def mockUpload(): Unit = mockUpload(body)
+
   def mockUpload(expectedBody: String): Unit = {
+    mockMultipartInitiation()
+
+    mockPartUpload(expectedBody)
+
+    mockMultipartCompletion()
+  }
+
+  def mockMultipartInitiation(): Unit = {
     mock
       .register(
         post(urlEqualTo(s"/$bucketKey?uploads")).willReturn(
@@ -347,14 +330,16 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
             .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Bucket>$bucket</Bucket>
                          |  <Key>$bucketKey</Key>
                          |  <UploadId>$uploadId</UploadId>
                          |</InitiateMultipartUploadResult>""".stripMargin)
         )
       )
+  }
 
+  def mockPartUpload(expectedBody: String): Unit = {
     mock.register(
       put(urlEqualTo(s"/$bucketKey?partNumber=1&uploadId=$uploadId"))
         .withRequestBody(if (expectedBody.isEmpty) absent() else matching(expectedBody))
@@ -366,7 +351,9 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("ETag", "\"" + etag + "\"")
         )
     )
+  }
 
+  def mockMultipartCompletion(): Unit = {
     mock.register(
       post(urlEqualTo(s"/$bucketKey?uploadId=$uploadId"))
         .withRequestBody(containing("CompleteMultipartUpload"))
@@ -378,7 +365,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
             .withHeader("x-amz-request-id", "5A37448A3762224333")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<CompleteMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Location>$url</Location>
                          |  <Bucket>$bucket</Bucket>
                          |  <Key>$bucketKey</Key>
@@ -388,48 +375,106 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
     )
   }
 
-  def mockUploadWithInternalError(expectedBody: String): Unit = {
+  def mockMultipartUploadInitiationWithTransientError(expectedBody: String, faultOrStatus: Either[Fault, Int]): Unit = {
+    val scenarioName = "UploadWithTransientErrors"
+    val responseBuilder = faultOrStatus match {
+      case Left(fault) => aResponse().withFault(fault)
+      case Right(status) =>
+        aResponse()
+          .withStatus(status)
+          .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
+          .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
+          .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
+                     |<Error>
+                     |  <Code>InternalError</Code>
+                     |  <Message>We encountered an internal error. Please try again.</Message>
+                     |  <Resource>$bucket/$bucketKey</Resource>
+                     |  <RequestId>4442587FB7D0A2F9</RequestId>
+                     |</Error>""".stripMargin)
+    }
     mock
       .register(
         post(urlEqualTo(s"/$bucketKey?uploads"))
-          .inScenario("InternalError")
+          .inScenario(scenarioName)
           .whenScenarioStateIs(Scenario.STARTED)
-          .willReturn(
-            aResponse()
-              .withStatus(500)
-              .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
-              .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
-              .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<Error>
-                         |  <Code>InternalError</Code>
-                         |  <Message>We encountered an internal error. Please try again.</Message>
-                         |  <Resource>$bucket/$bucketKey</Resource>
-                         |  <RequestId>4442587FB7D0A2F9</RequestId>
-                         |</Error>""".stripMargin)
-          )
-          .willSetStateTo("Recover")
+          .willReturn(responseBuilder)
+          .willSetStateTo("RecoverFromErrorOnInitiate")
       )
+
     mock
       .register(
         post(urlEqualTo(s"/$bucketKey?uploads"))
-          .inScenario("InternalError")
-          .whenScenarioStateIs("Recover")
+          .inScenario(scenarioName)
+          .whenScenarioStateIs("RecoverFromErrorOnInitiate")
           .willReturn(
             aResponse()
               .withStatus(200)
               .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
               .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
               .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-                         |  <Bucket>$bucket</Bucket>
-                         |  <Key>$bucketKey</Key>
-                         |  <UploadId>$uploadId</UploadId>
-                         |</InitiateMultipartUploadResult>""".stripMargin)
+                           |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
+                           |  <Bucket>$bucket</Bucket>
+                           |  <Key>$bucketKey</Key>
+                           |  <UploadId>$uploadId</UploadId>
+                           |</InitiateMultipartUploadResult>""".stripMargin)
           )
       )
 
+    mockPartUpload(expectedBody)
+
+    mockMultipartCompletion()
+  }
+
+  def mockMultipartPartUploadWithTransient500Error(expectedBody: String, numFailures: Int = 1): Unit = {
+
+    val response = aResponse()
+      .withStatus(500)
+      .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
+      .withHeader("x-amz-request-id", "5A37448A37622243")
+      .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
+                   |<Error>
+                   |  <Code>InternalError</Code>
+                   |  <Message>We encountered an internal error. Please try again.</Message>
+                   |  <Resource>$bucket/$bucketKey</Resource>
+                   |  <RequestId>4442587FB7D0A2F9</RequestId>
+                   |</Error>""".stripMargin)
+
+    mockMultipartPartUploadWithTransientError(expectedBody, response, numFailures)
+  }
+
+  def mockMultipartPartUploadWithTransientConnectionError(expectedBody: String): Unit = {
+
+    val response = aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)
+    mockMultipartPartUploadWithTransientError(expectedBody, response, 1)
+  }
+
+  private def mockMultipartPartUploadWithTransientError(expectedBody: String,
+                                                        response: ResponseDefinitionBuilder,
+                                                        numFailures: Int): Unit = {
+    val scenarioName = "UploadWithTransientErrors"
+
+    mockMultipartInitiation()
+
+    for (i <- 1 to numFailures) {
+      val initialState = if (i == 1) Scenario.STARTED else s"Failure#$i"
+      val nextState = if (i == numFailures) "RecoverFromErrorOnPartUpload" else s"Failure#${i + 1}"
+
+      mock.register(
+        put(urlEqualTo(s"/$bucketKey?partNumber=1&uploadId=$uploadId"))
+          .inScenario(scenarioName)
+          .whenScenarioStateIs(initialState)
+          .withRequestBody(matching(expectedBody))
+          .willReturn(
+            response
+          )
+          .willSetStateTo(nextState)
+      )
+    }
+
     mock.register(
       put(urlEqualTo(s"/$bucketKey?partNumber=1&uploadId=$uploadId"))
+        .inScenario(scenarioName)
+        .whenScenarioStateIs("RecoverFromErrorOnPartUpload")
         .withRequestBody(matching(expectedBody))
         .willReturn(
           aResponse()
@@ -440,23 +485,32 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
         )
     )
 
-    mock.register(
-      post(urlEqualTo(s"/$bucketKey?uploadId=$uploadId"))
-        .withRequestBody(containing("CompleteMultipartUpload"))
-        .withRequestBody(containing(etag))
-        .willReturn(
+    mockMultipartCompletion()
+  }
+
+  def mockUnrecoverableMultipartPartUploadFailure(): Unit = {
+    mock
+      .register(
+        post(urlEqualTo(s"/$bucketKey?uploads")).willReturn(
           aResponse()
             .withStatus(200)
-            .withHeader("Content-Type", "application/xml; charset=UTF-8")
-            .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
-            .withHeader("x-amz-request-id", "5A37448A3762224333")
+            .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
+            .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-                         |  <Location>$url</Location>
+                         |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Bucket>$bucket</Bucket>
                          |  <Key>$bucketKey</Key>
-                         |  <ETag>"$etag"</ETag>
-                         |</CompleteMultipartUploadResult>""".stripMargin)
+                         |  <UploadId>$uploadId</UploadId>
+                         |</InitiateMultipartUploadResult>""".stripMargin)
+        )
+      )
+
+    mock.register(
+      put(urlEqualTo(s"/$bucketKey?partNumber=1&uploadId=$uploadId"))
+        .withRequestBody(matching(body))
+        .willReturn(
+          aResponse()
+            .withStatus(500)
         )
     )
   }
@@ -474,7 +528,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
               .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
               .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
               .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Bucket>$bucket</Bucket>
                          |  <Key>$bucketKey</Key>
                          |  <UploadId>$uploadId</UploadId>
@@ -508,7 +562,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
             .withHeader("x-amz-request-id", "5A37448A3762224333")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<CompleteMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Location>$url</Location>
                          |  <Bucket>$bucket</Bucket>
                          |  <Key>$bucketKey</Key>
@@ -541,7 +595,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
             .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
                          |  <UploadId>$uploadId</UploadId>
@@ -577,7 +631,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
             .withHeader("x-amz-request-id", "5A37448A3762224333")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<CompleteMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Location>$targetUrl</Location>
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
@@ -610,7 +664,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
             .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
                          |  <UploadId>$uploadId</UploadId>
@@ -652,7 +706,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-request-id", "5A37448A3762224333")
             .withHeader("x-amz-version-id", "43jfkodU8493jnFJD9fjj3HHNVfdsQUIFDNsidf038jfdsjGFDSIRp")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<CompleteMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Location>$targetUrl</Location>
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
@@ -691,7 +745,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
               .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
               .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
               .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                           |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                           |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                            |  <Bucket>$targetBucket</Bucket>
                            |  <Key>$targetBucketKey</Key>
                            |  <UploadId>$uploadId</UploadId>
@@ -736,7 +790,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
             .withHeader("x-amz-request-id", "5A37448A3762224333")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<CompleteMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Location>$targetUrl</Location>
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
@@ -768,7 +822,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==")
             .withHeader("x-amz-request-id", "656c76696e6727732072657175657374")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<InitiateMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
                          |  <UploadId>$uploadId</UploadId>
@@ -823,7 +877,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
             .withHeader("x-amz-id-2", "Zn8bf8aEFQ+kBnGPBc/JaAf9SoWM68QDPS9+SyFwkIZOHUG2BiRLZi5oXw4cOCEt")
             .withHeader("x-amz-request-id", "5A37448A3762224333")
             .withBody(s"""<?xml version="1.0" encoding="UTF-8"?>
-                         |<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                         |<CompleteMultipartUploadResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                          |  <Location>$targetUrl</Location>
                          |  <Bucket>$targetBucket</Bucket>
                          |  <Key>$targetBucketKey</Key>
@@ -864,7 +918,7 @@ abstract class S3WireMockBase(_system: ActorSystem, val _wireMockServer: WireMoc
     )
 }
 
-private object S3WireMockBase {
+object S3WireMockBase {
 
   def getCallerName(clazz: Class[_]): String = {
     val s = (Thread.currentThread.getStackTrace map (_.getClassName) drop 1)
@@ -888,7 +942,7 @@ private object S3WireMockBase {
     server
   }
 
-  private def config(proxyPort: Int) = ConfigFactory.parseString(s"""
+  def config(proxyPort: Int): Config = ConfigFactory.parseString(s"""
     |${S3Settings.ConfigPath} {
     |  aws {
     |    credentials {
@@ -903,6 +957,10 @@ private object S3WireMockBase {
     |  }
     |  path-style-access = false
     |  endpoint-url = "http://localhost:$proxyPort"
+    |  retry-settings {
+    |    min-backoff = 100ms
+    |    max-backoff = 300ms
+    |  }
     |}
     """.stripMargin)
 }

@@ -1,13 +1,12 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.actor.ActorSystem;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.alpakka.udp.Datagram;
 import akka.stream.alpakka.udp.javadsl.Udp;
 import akka.stream.javadsl.Flow;
@@ -21,19 +20,20 @@ import akka.testkit.javadsl.TestKit;
 import akka.util.ByteString;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletionStage;
 
 public class UdpTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static ActorSystem system;
-  private static Materializer materializer;
 
   @BeforeClass
   public static void setup() {
     system = ActorSystem.create("UdpTest");
-    materializer = ActorMaterializer.create(system);
   }
 
   @AfterClass
@@ -59,7 +59,7 @@ public class UdpTest {
             TestSource.<Datagram>probe(system)
                 .viaMat(bindFlow, Keep.both())
                 .toMat(TestSink.probe(system), Keep.both())
-                .run(materializer);
+                .run(system);
 
     {
       // #send-datagrams
@@ -82,7 +82,7 @@ public class UdpTest {
     Source.range(1, messagesToSend)
         .map(i -> ByteString.fromString("Message " + i))
         .map(bs -> Datagram.create(bs, destination))
-        .runWith(Udp.sendSink(system), materializer);
+        .runWith(Udp.sendSink(system), system);
     // #send-datagrams
 
     for (int i = 0; i < messagesToSend; i++) {

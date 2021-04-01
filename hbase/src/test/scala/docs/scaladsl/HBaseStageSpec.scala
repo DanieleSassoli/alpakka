@@ -1,34 +1,35 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.stream.alpakka.hbase.HTableSettings
 import akka.stream.alpakka.hbase.scaladsl.HTableStage
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestKit
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.hbase.{HBaseConfiguration, TableName}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
+import org.scalatest.BeforeAndAfterAll
 
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.language.implicitConversions
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 class HBaseStageSpec
     extends TestKit(ActorSystem("HBaseStageSpec"))
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with ScalaFutures
-    with BeforeAndAfterAll {
-
-  implicit val mat = ActorMaterializer()
+    with BeforeAndAfterAll
+    with LogCapturing {
 
   implicit val defaultPatience =
     PatienceConfig(timeout = 5.seconds, interval = 500.millis)
@@ -100,7 +101,7 @@ class HBaseStageSpec
 
   "HBase stage" must {
 
-    "write write entries to a sink" in {
+    "write entries to a sink" in {
       //#sink
       val sink = HTableStage.sink[Person](tableSettings)
 

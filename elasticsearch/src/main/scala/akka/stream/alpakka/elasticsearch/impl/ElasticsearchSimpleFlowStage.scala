@@ -1,22 +1,20 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.elasticsearch.impl
 
-import java.nio.charset.StandardCharsets
-
 import akka.annotation.InternalApi
+import akka.http.scaladsl.HttpExt
+import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.alpakka.elasticsearch._
 import akka.stream.stage._
-import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
-import org.apache.http.entity.StringEntity
-import org.apache.http.message.BasicHeader
-import org.apache.http.util.EntityUtils
-import org.elasticsearch.client.{Response, ResponseListener, RestClient}
+import akka.stream._
 
 import scala.collection.immutable
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.ExecutionContext
 
 /**
  * INTERNAL API.
@@ -25,24 +23,32 @@ import scala.util.{Failure, Success, Try}
  */
 @InternalApi
 private[elasticsearch] final class ElasticsearchSimpleFlowStage[T, C](
-    _indexName: String,
-    _typeName: String,
-    client: RestClient,
+    elasticsearchParams: ElasticsearchParams,
     settings: ElasticsearchWriteSettings,
     writer: MessageWriter[T]
-) extends GraphStage[FlowShape[immutable.Seq[WriteMessage[T, C]], Try[immutable.Seq[WriteResult[T, C]]]]] {
+)(implicit http: HttpExt, mat: Materializer, ec: ExecutionContext)
+    extends GraphStage[
+      FlowShape[(immutable.Seq[WriteMessage[T, C]], immutable.Seq[WriteResult[T, C]]), immutable.Seq[WriteResult[T, C]]]
+    ] {
 
-  private val in = Inlet[immutable.Seq[WriteMessage[T, C]]]("messages")
-  private val out = Outlet[Try[immutable.Seq[WriteResult[T, C]]]]("result")
+  private val in =
+    Inlet[(immutable.Seq[WriteMessage[T, C]], immutable.Seq[WriteResult[T, C]])]("messagesAndResultPassthrough")
+  private val out = Outlet[immutable.Seq[WriteResult[T, C]]]("result")
   override val shape = FlowShape(in, out)
 
   private val restApi: RestBulkApi[T, C] = settings.apiVersion match {
     case ApiVersion.V5 =>
-      require(_indexName != null, "You must define an index name")
-      require(_typeName != null, "You must define a type name")
-      new RestBulkApiV5[T, C](_indexName, _typeName, settings.versionType, writer)
+      new RestBulkApiV5[T, C](elasticsearchParams.indexName,
+                              elasticsearchParams.typeName.get,
+                              settings.versionType,
+                              settings.allowExplicitIndex,
+                              writer)
+    case ApiVersion.V7 =>
+      new RestBulkApiV7[T, C](elasticsearchParams.indexName, settings.versionType, settings.allowExplicitIndex, writer)
     case other => throw new IllegalArgumentException(s"API version $other is not supported")
   }
+
+  private val baseUri = Uri(settings.connection.baseUrl)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new StageLogic()
 
@@ -50,51 +56,82 @@ private[elasticsearch] final class ElasticsearchSimpleFlowStage[T, C](
 
     private var inflight = false
 
-    private val failureHandler = getAsyncCallback[Throwable](handleFailure)
-    private val responseHandler = getAsyncCallback[(immutable.Seq[WriteMessage[T, C]], Response)](handleResponse)
+    private val failureHandler =
+      getAsyncCallback[(immutable.Seq[WriteResult[T, C]], Throwable)](handleFailure)
+    private val responseHandler =
+      getAsyncCallback[(immutable.Seq[WriteMessage[T, C]], immutable.Seq[WriteResult[T, C]], String)](handleResponse)
 
     setHandlers(in, out, this)
 
     override def onPull(): Unit = tryPull()
 
     override def onPush(): Unit = {
-      val messages = grab(in)
+      val endpoint = if (settings.allowExplicitIndex) "/_bulk" else s"/${elasticsearchParams.indexName}/_bulk"
+      val (messages, resultsPassthrough) = grab(in)
       inflight = true
       val json: String = restApi.toJson(messages)
 
       log.debug("Posting data to Elasticsearch: {}", json)
 
-      // https://www.elastic.co/guide/en/elasticsearch/client/java-rest/current/java-rest-low-usage-requests.html
-      client.performRequestAsync(
-        "POST",
-        "/_bulk",
-        java.util.Collections.emptyMap[String, String](),
-        new StringEntity(json, StandardCharsets.UTF_8),
-        new ResponseListener() {
-          override def onFailure(exception: Exception): Unit = failureHandler.invoke(exception)
-          override def onSuccess(response: Response): Unit = responseHandler.invoke((messages, response))
-        },
-        new BasicHeader("Content-Type", "application/x-ndjson")
-      )
+      val uri = baseUri.withPath(Path(endpoint))
+      val request = HttpRequest(HttpMethods.POST)
+        .withUri(uri)
+        .withEntity(HttpEntity(NDJsonProtocol.`application/x-ndjson`, json))
+
+      ElasticsearchApi
+        .executeRequest(
+          request,
+          connectionSettings = settings.connection
+        )
+        .map {
+          case HttpResponse(StatusCodes.OK, _, responseEntity, _) =>
+            Unmarshal(responseEntity)
+              .to[String]
+              .map(json => responseHandler.invoke((messages, resultsPassthrough, json)))
+          case HttpResponse(status, _, responseEntity, _) =>
+            Unmarshal(responseEntity).to[String].map { body =>
+              failureHandler.invoke(
+                (resultsPassthrough,
+                 new RuntimeException(s"Request failed for POST $uri, got $status with body: $body"))
+              )
+            }
+        }
     }
 
-    private def handleFailure(exception: Throwable): Unit = {
+    private def handleFailure(
+        args: (immutable.Seq[WriteResult[T, C]], Throwable)
+    ): Unit = {
       inflight = false
-      push(out, Failure(exception))
-      if (isClosed(in)) completeStage()
-      else tryPull()
+      val (resultsPassthrough, exception) = args
+
+      log.error(s"Received error from elastic after having already processed {} documents. Error: {}",
+                resultsPassthrough.size,
+                exception)
+      failStage(exception)
     }
 
-    private def handleResponse(args: (immutable.Seq[WriteMessage[T, C]], Response)): Unit = {
+    private def handleResponse(
+        args: (immutable.Seq[WriteMessage[T, C]], immutable.Seq[WriteResult[T, C]], String)
+    ): Unit = {
       inflight = false
-      val (messages, response) = args
-      val jsonString = EntityUtils.toString(response.getEntity)
+      val (messages, resultsPassthrough, response) = args
+
       if (log.isDebugEnabled) {
         import spray.json._
-        log.debug("response {}", jsonString.parseJson.prettyPrint)
+        log.debug("response {}", response.parseJson.prettyPrint)
       }
-      val messageResults = restApi.toWriteResults(messages, jsonString)
-      push(out, Success(messageResults))
+      val messageResults = restApi.toWriteResults(messages, response)
+
+      if (log.isErrorEnabled) {
+        messageResults.filterNot(_.success).foreach { failure =>
+          if (failure.getError.isPresent) {
+            log.error(s"Received error from elastic when attempting to index documents. Error: {}",
+                      failure.getError.get)
+          }
+        }
+      }
+
+      emit(out, messageResults ++ resultsPassthrough)
       if (isClosed(in)) completeStage()
       else tryPull()
     }

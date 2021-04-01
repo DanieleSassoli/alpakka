@@ -1,12 +1,11 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.alpakka.xml.Characters;
 import akka.stream.alpakka.xml.EndDocument;
 import akka.stream.alpakka.xml.EndElement;
@@ -21,6 +20,7 @@ import akka.util.ByteString;
 import com.fasterxml.aalto.AsyncXMLInputFactory;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.w3c.dom.Element;
 
@@ -36,11 +36,12 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class XmlParsingTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static ActorSystem system;
-  private static Materializer materializer;
 
   @Test
   public void xmlParser() throws InterruptedException, ExecutionException, TimeoutException {
@@ -55,8 +56,7 @@ public class XmlParsingTest {
 
     // #parser-usage
     final String doc = "<doc><elem>elem1</elem><elem>elem2</elem></doc>";
-    final CompletionStage<List<ParseEvent>> resultStage =
-        Source.single(doc).runWith(parse, materializer);
+    final CompletionStage<List<ParseEvent>> resultStage = Source.single(doc).runWith(parse, system);
     // #parser-usage
 
     resultStage
@@ -116,7 +116,7 @@ public class XmlParsingTest {
                     }
                   };
                 })
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
 
     List<String> list = stage.toCompletableFuture().get(5, TimeUnit.SECONDS);
     assertThat(list, hasItems("elem1", "elem2"));
@@ -135,8 +135,7 @@ public class XmlParsingTest {
             .toMat(Sink.seq(), Keep.right());
 
     final String doc = "<doc><elem>elem1</elem><elem>elem2</elem></doc>";
-    final CompletionStage<List<ParseEvent>> resultStage =
-        Source.single(doc).runWith(parse, materializer);
+    final CompletionStage<List<ParseEvent>> resultStage = Source.single(doc).runWith(parse, system);
 
     resultStage
         .thenAccept(
@@ -181,8 +180,7 @@ public class XmlParsingTest {
             + "    <item>i3</item>"
             + "  </elem>"
             + "</doc>";
-    final CompletionStage<List<ParseEvent>> resultStage =
-        Source.single(doc).runWith(parse, materializer);
+    final CompletionStage<List<ParseEvent>> resultStage = Source.single(doc).runWith(parse, system);
     // #subslice-usage
 
     resultStage
@@ -222,8 +220,7 @@ public class XmlParsingTest {
             + "    <item>i3</item>"
             + "  </elem>"
             + "</doc>";
-    final CompletionStage<List<Element>> resultStage =
-        Source.single(doc).runWith(parse, materializer);
+    final CompletionStage<List<Element>> resultStage = Source.single(doc).runWith(parse, system);
     // #subtree-usage
 
     resultStage
@@ -238,13 +235,12 @@ public class XmlParsingTest {
   }
 
   @BeforeClass
-  public static void setup() throws Exception {
+  public static void setup() {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
   }
 
   @AfterClass
-  public static void teardown() throws Exception {
+  public static void teardown() {
     TestKit.shutdownActorSystem(system);
   }
 }

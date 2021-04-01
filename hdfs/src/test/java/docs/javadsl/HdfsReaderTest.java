@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,12 +7,12 @@ package docs.javadsl;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
 import akka.stream.IOResult;
 import akka.stream.alpakka.hdfs.*;
 import akka.stream.alpakka.hdfs.javadsl.HdfsFlow;
 import akka.stream.alpakka.hdfs.javadsl.HdfsSource;
 import akka.stream.alpakka.hdfs.util.JavaTestUtils;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
@@ -24,10 +24,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.compress.DefaultCodec;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -38,9 +35,10 @@ import java.util.stream.Collectors;
 import static org.junit.Assert.assertArrayEquals;
 
 public class HdfsReaderTest {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   private static MiniDFSCluster hdfsCluster = null;
   private static ActorSystem system;
-  private static ActorMaterializer materializer;
   private static String destination = JavaTestUtils.destination();
   private static FileSystem fs = null;
   private static HdfsWritingSettings settings = HdfsWritingSettings.create();
@@ -54,7 +52,7 @@ public class HdfsReaderTest {
             fs, SyncStrategy.count(500), RotationStrategy.size(0.5, FileUnit.KB()), settings);
 
     CompletionStage<List<RotationMessage>> resF =
-        Source.from(data).map(HdfsWriteMessage::create).via(flow).runWith(Sink.seq(), materializer);
+        Source.from(data).map(HdfsWriteMessage::create).via(flow).runWith(Sink.seq(), system);
 
     List<RotationMessage> logs = new ArrayList<>(resF.toCompletableFuture().get());
     List<Character> readData = new ArrayList<>();
@@ -65,7 +63,7 @@ public class HdfsReaderTest {
       Source<ByteString, CompletionStage<IOResult>> source = HdfsSource.data(fs, path);
       // #define-data-source
       ArrayList<ByteString> result =
-          new ArrayList<>(source.runWith(Sink.seq(), materializer).toCompletableFuture().get());
+          new ArrayList<>(source.runWith(Sink.seq(), system).toCompletableFuture().get());
       for (ByteString bs : result) {
         readData.addAll(
             bs.utf8String().chars().mapToObj(i -> (char) i).collect(Collectors.toList()));
@@ -90,10 +88,7 @@ public class HdfsReaderTest {
         JavaTestUtils.generateFakeContentWithPartitions(1, FileUnit.MB().byteCount(), 30);
 
     CompletionStage<List<RotationMessage>> resF =
-        Source.from(content)
-            .map(HdfsWriteMessage::create)
-            .via(flow)
-            .runWith(Sink.seq(), materializer);
+        Source.from(content).map(HdfsWriteMessage::create).via(flow).runWith(Sink.seq(), system);
 
     List<RotationMessage> logs = new ArrayList<>(resF.toCompletableFuture().get());
     List<Character> readData = new ArrayList<>();
@@ -104,7 +99,7 @@ public class HdfsReaderTest {
       Source<ByteString, CompletionStage<IOResult>> source = HdfsSource.compressed(fs, path, codec);
       // #define-compressed-source
       ArrayList<ByteString> result =
-          new ArrayList<>(source.runWith(Sink.seq(), materializer).toCompletableFuture().get());
+          new ArrayList<>(source.runWith(Sink.seq(), system).toCompletableFuture().get());
       for (ByteString bs : result) {
         readData.addAll(
             bs.utf8String().chars().mapToObj(i -> (char) i).collect(Collectors.toList()));
@@ -131,10 +126,7 @@ public class HdfsReaderTest {
         JavaTestUtils.generateFakeContentForSequence(0.5, FileUnit.MB().byteCount());
 
     CompletionStage<List<RotationMessage>> resF =
-        Source.from(content)
-            .map(HdfsWriteMessage::create)
-            .via(flow)
-            .runWith(Sink.seq(), materializer);
+        Source.from(content).map(HdfsWriteMessage::create).via(flow).runWith(Sink.seq(), system);
 
     List<RotationMessage> logs = new ArrayList<>(resF.toCompletableFuture().get());
     List<Pair<Text, Text>> readData = new ArrayList<>();
@@ -146,7 +138,7 @@ public class HdfsReaderTest {
           HdfsSource.sequence(fs, path, Text.class, Text.class);
       // #define-sequence-source
       ArrayList<Pair<Text, Text>> result =
-          new ArrayList<>(source.runWith(Sink.seq(), materializer).toCompletableFuture().get());
+          new ArrayList<>(source.runWith(Sink.seq(), system).toCompletableFuture().get());
       readData.addAll(result);
     }
 
@@ -163,7 +155,6 @@ public class HdfsReaderTest {
     fs = FileSystem.get(conf);
 
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
   }
 
   @AfterClass

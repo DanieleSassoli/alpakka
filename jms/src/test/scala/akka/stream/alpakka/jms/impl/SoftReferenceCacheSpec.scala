@@ -1,17 +1,18 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms.impl
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
 import scala.concurrent.duration._
 
-class SoftReferenceCacheSpec extends WordSpec with Matchers {
+class SoftReferenceCacheSpec extends AnyWordSpec with Matchers {
 
   "soft reference cache lookup" should {
     "return default value on miss" in {
@@ -103,7 +104,7 @@ class SoftReferenceCacheSpec extends WordSpec with Matchers {
                 }
                 state.counter = count
                 state
-              }.foreach(enqueue)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+              }.foreach(enqueue)(akka.dispatch.ExecutionContexts.parasitic)
             }
           }
         }

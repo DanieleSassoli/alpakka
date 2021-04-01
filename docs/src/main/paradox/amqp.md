@@ -12,6 +12,11 @@ AMQP 1.0 is currently not supported (Qpid, ActiveMQ, Solace, etc.).
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-amqp_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.
@@ -29,6 +34,10 @@ There are several types of @apidoc[AmqpConnectionProvider]:
 * @apidoc[AmqpDetailsConnectionProvider$] which supports more fine-grained configuration. It creates a new connection for each stage.
 * @apidoc[AmqpConnectionFactoryConnectionProvider$] which takes a raw [ConnectionFactory](https://rabbitmq.github.io/rabbitmq-java-client/api/current/com/rabbitmq/client/ConnectionFactory.html). It creates a new connection for each stage.
 * @apidoc[AmqpCachedConnectionProvider$] which receive any other provider as parameter and caches the connection it provides to be used in all stages. By default it closes the connection whenever the last stage using the provider stops. Optionally, it takes `automaticRelease` boolean parameter so the connection is not automatically release and the user have to release it explicitly.
+
+@@@ warning
+Please be aware that the basic usage of @apidoc[AmqpConnectionProvider] like this `AmqpUriConnectionProvider(s"amqp://$host:$port")` has an issue with recovering connections, more details can be found in this [issue](https://github.com/akka/alpakka/issues/1270)
+@@@
 
 ## Sending messages
 

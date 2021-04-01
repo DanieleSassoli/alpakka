@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.couchbase
 
 import java.util.concurrent.{CompletionStage, TimeUnit}
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, ClassicActorSystemProvider}
 import akka.annotation.InternalApi
 import com.couchbase.client.java.document.Document
 import com.couchbase.client.java.env.CouchbaseEnvironment
@@ -127,6 +127,14 @@ object CouchbaseSessionSettings {
 
   /**
    * Scala API:
+   * Load the session from the default config path `alpakka.couchbase.session`, expects the config object to have the fields `username`,
+   * `password` and `nodes`.
+   */
+  def apply(system: ClassicActorSystemProvider): CouchbaseSessionSettings =
+    apply(system.classicSystem)
+
+  /**
+   * Scala API:
    */
   def apply(username: String, password: String): CouchbaseSessionSettings =
     new CouchbaseSessionSettings(username, password, Nil, environment = None, enrichAsync = Future.successful)
@@ -151,6 +159,14 @@ object CouchbaseSessionSettings {
    */
   def create(system: ActorSystem): CouchbaseSessionSettings =
     apply(system.settings.config.getConfig(configPath))
+
+  /**
+   * Java API:
+   * Load the session from the default config path `alpakka.couchbase.session`, expects the config object to have the fields `username`,
+   * `password` and `nodes`.
+   */
+  def create(system: ClassicActorSystemProvider): CouchbaseSessionSettings =
+    apply(system.classicSystem)
 }
 
 final class CouchbaseSessionSettings private (

@@ -6,7 +6,7 @@ Google Cloud Pub/Sub provides many-to-many, asynchronous messaging that decouple
 Further information at the official [Google Cloud documentation website](https://cloud.google.com/pubsub/docs/overview).
 @@@
 
-This connector communicates to Pub/Sub via HTTP requests (i.e. https://pubsub.googleapis.com). For a connector that uses gRPC for the communication, take a look at the alternative @ref[Alpakka Google Cloud Pub/Sub gRPC](google-cloud-pub-sub-grpc.md) connector.
+This connector communicates to Pub/Sub via HTTP requests (i.e. `https://pubsub.googleapis.com`). For a connector that uses gRPC for the communication, take a look at the alternative @ref[Alpakka Google Cloud Pub/Sub gRPC](google-cloud-pub-sub-grpc.md) connector.
 
 @@project-info{ projectId="google-cloud-pub-sub" }
 
@@ -16,6 +16,19 @@ This connector communicates to Pub/Sub via HTTP requests (i.e. https://pubsub.go
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-google-cloud-pub-sub_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
+  symbol3=AkkaHttpVersion
+  value3=$akka-http.version$
+  group3=com.typesafe.akka
+  artifact3=akka-http_$scala.binary.version$
+  version3=AkkaHttpVersion
+  group4=com.typesafe.akka
+  artifact4=akka-http-spray-json_$scala.binary.version$
+  version4=AkkaHttpVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.
@@ -25,21 +38,16 @@ The table below shows direct dependencies of this module and the second tab show
 
 ## Usage
 
-Prepare your credentials for access to google cloud pub/sub.
+The Pub/Sub connector @ref[shares its basic configuration](google-common.md) with all the Google connectors in Alpakka.
+Additional Pub/Sub-specific configuration settings can be found in its own @github[reference.conf](/google-cloud-pub-sub/src/main/resources/reference.conf).
+
+And prepare the actor system.
 
 Scala
-: @@snip [snip](/google-cloud-pub-sub/src/test/scala/docs/scaladsl/ExampleUsage.scala) { #init-credentials }
+: @@snip [snip](/google-cloud-pub-sub/src/test/scala/docs/scaladsl/ExampleUsage.scala) { #init-system }
 
 Java
-: @@snip [snip](/google-cloud-pub-sub/src/test/java/docs/javadsl/ExampleUsageJava.java) { #init-credentials }
-
-And prepare the actor system and materializer.
-
-Scala
-: @@snip [snip](/google-cloud-pub-sub/src/test/scala/docs/scaladsl/ExampleUsage.scala) { #init-mat }
-
-Java
-: @@snip [snip](/google-cloud-pub-sub/src/test/java/docs/javadsl/ExampleUsageJava.java) { #init-mat }
+: @@snip [snip](/google-cloud-pub-sub/src/test/java/docs/javadsl/ExampleUsageJava.java) { #init-system }
 
 To publish a single request, build the message with a base64 data payload and put it in a @scaladoc[PublishRequest](akka.stream.alpakka.googlecloud.pubsub.PublishRequest). Publishing creates a flow taking the messages and returning the accepted message ids.
 

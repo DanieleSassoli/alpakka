@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.jms.impl
@@ -82,6 +82,7 @@ private class JmsMessageProducer(jmsProducer: jms.MessageProducer, jmsSession: J
           case v: Boolean => message.setBooleanProperty(key, v)
           case v: Byte => message.setByteProperty(key, v)
           case v: Short => message.setShortProperty(key, v)
+          case v: Float => message.setFloatProperty(key, v)
           case v: Long => message.setLongProperty(key, v)
           case v: Double => message.setDoubleProperty(key, v)
           case null => throw NullMessageProperty(key, jmsMessage)
@@ -98,6 +99,7 @@ private class JmsMessageProducer(jmsProducer: jms.MessageProducer, jmsSession: J
           case v: Boolean => message.setBoolean(key, v)
           case v: Byte => message.setByte(key, v)
           case v: Short => message.setShort(key, v)
+          case v: Float => message.setFloat(key, v)
           case v: Long => message.setLong(key, v)
           case v: Double => message.setDouble(key, v)
           case v: Array[Byte] => message.setBytes(key, v)

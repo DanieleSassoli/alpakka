@@ -1,33 +1,33 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
 import java.nio.file.Paths
 
-import akka.Done
 import akka.actor.ActorSystem
+import akka.stream.IOResult
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.{ActorMaterializer, IOResult, Materializer}
 import akka.testkit.TestKit
 import akka.util.ByteString
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, Matchers, RecoverMethods, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.{BeforeAndAfterAll, RecoverMethods}
 
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.util.Success
 
 class CharsetCodingFlowsDoc
     extends TestKit(ActorSystem("charset"))
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with BeforeAndAfterAll
     with ScalaFutures
-    with RecoverMethods {
-
-  private implicit val mat: Materializer = ActorMaterializer()
+    with RecoverMethods
+    with LogCapturing {
 
   val multiByteChars = "äåû經濟商行政管理总局التجارى"
 
@@ -37,6 +37,7 @@ class CharsetCodingFlowsDoc
       // format: off
       // #encoding
       import java.nio.charset.StandardCharsets
+
       import akka.stream.alpakka.text.scaladsl.TextFlow
       import akka.stream.scaladsl.FileIO
 
@@ -56,7 +57,7 @@ class CharsetCodingFlowsDoc
         .intersperse(ByteString("\n"))
         .runWith(FileIO.toPath(targetFile))
       // #encoding
-      result.futureValue.status should be(Success(Done))
+      result.futureValue.count should be > 50L
       // format: on
     }
   }
@@ -66,6 +67,7 @@ class CharsetCodingFlowsDoc
       // format: off
       // #decoding
       import java.nio.charset.StandardCharsets
+
       import akka.stream.alpakka.text.scaladsl.TextFlow
 
       // #decoding
@@ -93,8 +95,9 @@ class CharsetCodingFlowsDoc
       // format: off
       // #transcoding
       import java.nio.charset.StandardCharsets
-      import akka.stream.scaladsl.FileIO
+
       import akka.stream.alpakka.text.scaladsl.TextFlow
+      import akka.stream.scaladsl.FileIO
 
       // #transcoding
       val utf16bytes = ByteString("äåûßêëé", StandardCharsets.UTF_16)
@@ -111,7 +114,7 @@ class CharsetCodingFlowsDoc
         .via(TextFlow.transcoding(StandardCharsets.UTF_16, StandardCharsets.UTF_8))
         .runWith(FileIO.toPath(targetFile))
       // #transcoding
-      result.futureValue.status should be(Success(Done))
+      result.futureValue.count should be > 5L
       // format: on
     }
 

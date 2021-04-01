@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -7,26 +7,23 @@ package docs.javadsl;
 import akka.NotUsed;
 import akka.actor.ActorSystem;
 import akka.japi.Pair;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
 // #walk
 // #ls
+import akka.stream.Materializer;
 import akka.stream.alpakka.file.javadsl.Directory;
 // #ls
 import java.nio.file.FileVisitOption;
 // #walk
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.FlowWithContext;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.stream.testkit.javadsl.StreamTestKit;
-import akka.testkit.TestKit;
+import akka.testkit.javadsl.TestKit;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import scala.concurrent.duration.FiniteDuration;
+import org.junit.*;
 
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -41,15 +38,24 @@ import static org.junit.Assert.assertTrue;
 
 public class DirectoryTest {
 
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+  private static ActorSystem system;
+
+  @BeforeClass
+  public static void beforeAll() throws Exception {
+    system = ActorSystem.create();
+  }
+
+  @AfterClass
+  public static void afterAll() throws Exception {
+    TestKit.shutdownActorSystem(system);
+  }
+
   private FileSystem fs;
-  private ActorSystem system;
-  private Materializer materializer;
 
   @Before
   public void setup() {
     fs = Jimfs.newFileSystem(Configuration.unix());
-    system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
   }
 
   @Test
@@ -65,7 +71,7 @@ public class DirectoryTest {
     // #ls
 
     final List<Path> result =
-        source.runWith(Sink.seq(), materializer).toCompletableFuture().get(3, TimeUnit.SECONDS);
+        source.runWith(Sink.seq(), system).toCompletableFuture().get(3, TimeUnit.SECONDS);
     assertEquals(result.size(), 2);
     assertEquals(result.get(0), file1);
     assertEquals(result.get(1), file2);
@@ -90,7 +96,7 @@ public class DirectoryTest {
     // #walk
 
     final List<Path> result =
-        source.runWith(Sink.seq(), materializer).toCompletableFuture().get(3, TimeUnit.SECONDS);
+        source.runWith(Sink.seq(), system).toCompletableFuture().get(3, TimeUnit.SECONDS);
     assertEquals(result, Arrays.asList(root, subdir1, file1, subdir2, file2));
   }
 
@@ -113,7 +119,7 @@ public class DirectoryTest {
     // #walk
 
     final List<Path> result =
-        source.runWith(Sink.seq(), materializer).toCompletableFuture().get(3, TimeUnit.SECONDS);
+        source.runWith(Sink.seq(), system).toCompletableFuture().get(3, TimeUnit.SECONDS);
     assertEquals(result, Arrays.asList(root, subdir1, subdir2));
   }
 
@@ -128,7 +134,7 @@ public class DirectoryTest {
     CompletionStage<List<Path>> created =
         Source.from(Arrays.asList(dir.resolve("dirA"), dir.resolve("dirB")))
             .via(flow)
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     // #mkdirs
 
     final List<Path> result = created.toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -152,7 +158,7 @@ public class DirectoryTest {
             .via(flowWithContext)
             .asSource()
             .map(Pair::first)
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
 
     final List<Path> result = created.toCompletableFuture().get(3, TimeUnit.SECONDS);
     assertTrue(Files.isDirectory(result.get(0)));
@@ -163,10 +169,7 @@ public class DirectoryTest {
   public void tearDown() throws Exception {
     fs.close();
     fs = null;
-    StreamTestKit.assertAllStagesStopped(materializer);
-    TestKit.shutdownActorSystem(system, FiniteDuration.create(10, TimeUnit.SECONDS), true);
-    system = null;
-    materializer = null;
+    StreamTestKit.assertAllStagesStopped(Materializer.matFromSystem(system));
   }
 
   static class SomeContext {}

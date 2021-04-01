@@ -1,17 +1,18 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.s3.scaladsl
-import akka.{Done, NotUsed}
-import akka.http.scaladsl.model.headers.ByteRange
+import akka.actor.ClassicActorSystemProvider
 import akka.http.scaladsl.model._
-import akka.stream.{Attributes, Materializer}
-import akka.stream.alpakka.s3.headers.{CannedAcl, ServerSideEncryption}
+import akka.http.scaladsl.model.headers.ByteRange
+import akka.stream.Attributes
 import akka.stream.alpakka.s3._
+import akka.stream.alpakka.s3.headers.{CannedAcl, ServerSideEncryption}
 import akka.stream.alpakka.s3.impl._
 import akka.stream.scaladsl.{RunnableGraph, Sink, Source}
 import akka.util.ByteString
+import akka.{Done, NotUsed}
 
 import scala.concurrent.Future
 
@@ -118,6 +119,15 @@ object S3 {
    */
   def deleteObjectsByPrefix(bucket: String, prefix: Option[String], s3Headers: S3Headers): Source[Done, NotUsed] =
     S3Stream.deleteObjectsByPrefix(bucket, prefix, s3Headers)
+
+  /**
+   * Deletes all S3 Objects within the given bucket
+   *
+   * @param bucket the s3 bucket name
+   * @return A [[akka.stream.scaladsl.Source Source]] that will emit [[akka.Done]] when operation is completed
+   */
+  def deleteBucketContents(bucket: String): Source[Done, NotUsed] =
+    deleteObjectsByPrefix(bucket, None, S3Headers.empty)
 
   /**
    * Uploads a S3 Object, use this for small files and [[multipartUpload]] for bigger ones
@@ -352,8 +362,9 @@ object S3 {
    * @param bucketName bucket name
    * @return [[scala.concurrent.Future Future]] with type [[Done]] as API doesn't return any additional information
    */
-  def makeBucket(bucketName: String)(implicit mat: Materializer, attr: Attributes = Attributes()): Future[Done] =
-    makeBucket(bucketName, S3Headers.empty)
+  def makeBucket(bucketName: String)(implicit system: ClassicActorSystemProvider,
+                                     attr: Attributes = Attributes()): Future[Done] =
+    S3Stream.makeBucket(bucketName, S3Headers.empty)
 
   /**
    * Create new bucket with a given name
@@ -364,7 +375,8 @@ object S3 {
    * @param s3Headers any headers you want to add
    * @return [[scala.concurrent.Future Future]] with type [[Done]] as API doesn't return any additional information
    */
-  def makeBucket(bucketName: String, s3Headers: S3Headers)(implicit mat: Materializer, attr: Attributes): Future[Done] =
+  def makeBucket(bucketName: String, s3Headers: S3Headers)(implicit mat: ClassicActorSystemProvider,
+                                                           attr: Attributes): Future[Done] =
     S3Stream.makeBucket(bucketName, s3Headers)
 
   /**
@@ -398,9 +410,9 @@ object S3 {
    * @param bucketName bucket name
    * @return [[scala.concurrent.Future Future]] of type [[Done]] as API doesn't return any additional information
    */
-  def deleteBucket(bucketName: String)(implicit mat: Materializer,
+  def deleteBucket(bucketName: String)(implicit system: ClassicActorSystemProvider,
                                        attributes: Attributes = Attributes()): Future[Done] =
-    deleteBucket(bucketName, S3Headers.empty)
+    S3Stream.deleteBucket(bucketName, S3Headers.empty)
 
   /**
    * Delete bucket with a given name
@@ -414,7 +426,7 @@ object S3 {
   def deleteBucket(
       bucketName: String,
       s3Headers: S3Headers
-  )(implicit mat: Materializer, attributes: Attributes): Future[Done] =
+  )(implicit system: ClassicActorSystemProvider, attributes: Attributes): Future[Done] =
     S3Stream.deleteBucket(bucketName, s3Headers)
 
   /**
@@ -448,9 +460,9 @@ object S3 {
    * @param bucketName bucket name
    * @return [[scala.concurrent.Future Future]] of type [[BucketAccess]]
    */
-  def checkIfBucketExists(bucketName: String)(implicit mat: Materializer,
+  def checkIfBucketExists(bucketName: String)(implicit system: ClassicActorSystemProvider,
                                               attributes: Attributes = Attributes()): Future[BucketAccess] =
-    checkIfBucketExists(bucketName, S3Headers.empty)
+    S3Stream.checkIfBucketExists(bucketName, S3Headers.empty)
 
   /**
    *   Checks whether the bucket exits and user has rights to perform ListBucket operation
@@ -464,7 +476,7 @@ object S3 {
   def checkIfBucketExists(
       bucketName: String,
       s3Headers: S3Headers
-  )(implicit mat: Materializer, attributes: Attributes): Future[BucketAccess] =
+  )(implicit system: ClassicActorSystemProvider, attributes: Attributes): Future[BucketAccess] =
     S3Stream.checkIfBucketExists(bucketName, s3Headers)
 
   /**

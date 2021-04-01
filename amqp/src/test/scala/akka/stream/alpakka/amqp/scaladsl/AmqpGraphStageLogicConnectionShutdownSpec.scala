@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.amqp.scaladsl
@@ -9,7 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContexts
-import akka.stream.ActorMaterializer
 import akka.stream.alpakka.amqp.{
   AmqpCachedConnectionProvider,
   AmqpConnectionFactoryConnectionProvider,
@@ -17,28 +16,32 @@ import akka.stream.alpakka.amqp.{
   AmqpWriteSettings,
   QueueDeclaration
 }
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.rabbitmq.client.{AddressResolver, Connection, ConnectionFactory, ShutdownListener}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
+import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * see [[https://github.com/akka/alpakka/issues/883]] and
  * [[https://github.com/akka/alpakka/pull/887]]
  */
 class AmqpGraphStageLogicConnectionShutdownSpec
-    extends WordSpec
+    extends AnyWordSpec
     with Matchers
     with ScalaFutures
-    with BeforeAndAfterEach {
+    with BeforeAndAfterEach
+    with LogCapturing {
 
   override implicit val patienceConfig = PatienceConfig(10.seconds)
-  private implicit val executionContext = ExecutionContexts.sameThreadExecutionContext
+  private implicit val executionContext = ExecutionContexts.parasitic
 
   val shutdownsAdded = new AtomicInteger()
   val shutdownsRemoved = new AtomicInteger()
@@ -64,7 +67,6 @@ class AmqpGraphStageLogicConnectionShutdownSpec
     // actor system is within this test as it has to be shut down in order
     // to verify graph stage termination
     implicit val system = ActorSystem(this.getClass.getSimpleName + System.currentTimeMillis())
-    implicit val materializer = ActorMaterializer()
 
     val connectionFactory = new ConnectionFactory() {
       override def newConnection(es: ExecutorService, ar: AddressResolver, name: String): Connection =

@@ -12,6 +12,11 @@ Azure Storage Queue is a queuing service similar to Amazon's SQS. It is designed
   group=com.lightbend.akka
   artifact=akka-stream-alpakka-azure-storage-queue_$scala.binary.version$
   version=$project.version$
+  symbol2=AkkaVersion
+  value2=$akka.version$
+  group2=com.typesafe.akka
+  artifact2=akka-stream_$scala.binary.version$
+  version2=AkkaVersion
 }
 
 The table below shows direct dependencies of this module and the second tab shows all libraries it depends on transitively.
@@ -32,7 +37,7 @@ val queueFactory = () => { // Since azure storage JDK is not guaranteed to be th
 }
 ```
 
-For more details, see [Microsoft Azure Storage Docs](https://docs.microsoft.com/en-us/azure/storage/storage-java-how-to-use-queue-storage).
+For more details, see [Microsoft Azure Storage Docs](https://docs.microsoft.com/en-us/azure/storage/queues/storage-java-how-to-use-queue-storage).
 
 ## Queuing a message
 

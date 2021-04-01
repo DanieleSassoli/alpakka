@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.googlecloud.pubsub.javadsl
@@ -14,39 +14,66 @@ import akka.{Done, NotUsed}
 
 import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
+import scala.concurrent.Future
 
+/**
+ * Java DSL for Google Pub/Sub
+ */
 object GooglePubSub {
 
+  /**
+   * Creates a flow to that publishes messages to a topic and emits the message ids.
+   */
   def publish(topic: String,
               config: PubSubConfig,
               parallelism: Int): Flow[PublishRequest, java.util.List[String], NotUsed] =
     GPubSub
-      .publish(topic = topic, config = config, parallelism = parallelism)
+      .publish(topic, config, parallelism)
       .map(response => response.asJava)
       .asJava
 
+  /**
+   * Creates a flow to that publishes messages to a topic and emits the message ids and carries a context
+   * through.
+   */
   def publishWithContext[C](topic: String,
                             config: PubSubConfig,
                             parallelism: Int): FlowWithContext[PublishRequest, C, java.util.List[String], C, NotUsed] =
     GPubSub
-      .publishWithContext[C](topic = topic, config = config, parallelism = parallelism)
+      .publishWithContext[C](topic, config, parallelism)
       .map(response => response.asJava)
       .asJava
 
+  /**
+   * Creates a source pulling messages from a subscription.
+   */
   def subscribe(subscription: String, config: PubSubConfig): Source[ReceivedMessage, Cancellable] =
     GPubSub
-      .subscribe(subscription = subscription, config = config)
+      .subscribe(subscription, config)
       .asJava
 
-  @deprecated("Use `acknowledge` without `parallelism` param", since = "2.0.0")
-  def acknowledge(subscription: String,
-                  config: PubSubConfig,
-                  parallelism: Int): Sink[AcknowledgeRequest, CompletionStage[Done]] =
-    acknowledge(subscription, config)
+  /**
+   * Creates a flow pulling messages from a subscription.
+   */
+  def subscribeFlow(subscription: String, config: PubSubConfig): Flow[Done, ReceivedMessage, Future[NotUsed]] =
+    GPubSub
+      .subscribeFlow(subscription, config)
+      .asJava
 
+  /**
+   * Creates a flow for acknowledging messages on a subscription.
+   */
+  def acknowledgeFlow(subscription: String, config: PubSubConfig): Flow[AcknowledgeRequest, Done, NotUsed] =
+    GPubSub
+      .acknowledgeFlow(subscription, config)
+      .asJava
+
+  /**
+   * Creates a sink for acknowledging messages on a subscription.
+   */
   def acknowledge(subscription: String, config: PubSubConfig): Sink[AcknowledgeRequest, CompletionStage[Done]] =
     GPubSub
-      .acknowledge(subscription = subscription, config = config)
+      .acknowledge(subscription, config)
       .mapMaterializedValue(_.toJava)
       .asJava
 }

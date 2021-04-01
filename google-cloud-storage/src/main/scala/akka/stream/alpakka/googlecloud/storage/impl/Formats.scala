@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.googlecloud.storage.impl
@@ -10,8 +10,6 @@ import akka.http.scaladsl.model.{ContentType, ContentTypes}
 import akka.stream.alpakka.googlecloud.storage._
 import spray.json.{DefaultJsonProtocol, JsObject, JsValue, RootJsonFormat, RootJsonReader}
 
-import java.time.OffsetDateTime
-
 import scala.util.Try
 
 @akka.annotation.InternalApi
@@ -20,7 +18,7 @@ object Formats extends DefaultJsonProtocol {
   private final case class CustomerEncryption(encryptionAlgorithm: String, keySha256: String)
   private implicit val customerEncryptionJsonFormat = jsonFormat2(CustomerEncryption)
 
-  private final case class Owner(entity: String, entityId: String)
+  private final case class Owner(entity: String, entityId: Option[String])
   private implicit val OwnerJsonFormat = jsonFormat2(Owner)
 
   private final case class ProjectTeam(projectNumber: String, team: String)
@@ -61,7 +59,7 @@ object Formats extends DefaultJsonProtocol {
       mediaLink: String,
       metageneration: String,
       owner: Option[Owner],
-      retentionExpirationTime: String,
+      retentionExpirationTime: Option[String],
       selfLink: String,
       size: String,
       timeCreated: String,
@@ -74,22 +72,23 @@ object Formats extends DefaultJsonProtocol {
 
   // private sub class of StorageObjectJson used to workaround 22 field jsonFormat issue
   private final case class StorageObjectWriteableJson(
-      cacheControl: String,
-      contentDisposition: String,
-      contentEncoding: String,
-      contentLanguage: String,
+      cacheControl: Option[String],
+      contentDisposition: Option[String],
+      contentEncoding: Option[String],
+      contentLanguage: Option[String],
       contentType: Option[String],
+      customTime: Option[String],
       crc32c: String,
-      eventBasedHold: Boolean,
+      eventBasedHold: Option[Boolean],
       md5Hash: String,
       metadata: Option[Map[String, String]],
       name: String,
       storageClass: String,
-      temporaryHold: Boolean,
+      temporaryHold: Option[Boolean],
       acl: Option[List[ObjectAccessControls]]
   )
 
-  private implicit val storageObjectWritableJson = jsonFormat13(StorageObjectWriteableJson)
+  private implicit val storageObjectWritableJson = jsonFormat14(StorageObjectWriteableJson)
 
   private implicit object StorageObjectJsonFormat extends RootJsonFormat[StorageObjectJson] {
     override def read(value: JsValue): StorageObjectJson = {
@@ -232,35 +231,39 @@ object Formats extends DefaultJsonProtocol {
       strToLongOrThrow(size, "size"),
       etag,
       md5Hash,
+      Option(md5Hash),
       crc32c,
+      Option(crc32c),
       mediaLink,
       selfLink,
       strToDateTimeOrThrow(updated, "updated"),
       strToDateTimeOrThrow(timeCreated, "timeCreated"),
       timeDeleted.map(td => strToDateTimeOrThrow(td, "timeDeleted")),
       storageClass,
+      Option(storageClass),
       contentDisposition,
       contentEncoding,
       contentLanguage,
       strToLongOrThrow(metageneration, "metageneration"),
       temporaryHold,
       eventBasedHold,
-      strToDateTimeOrThrow(retentionExpirationTime, "retentionExpirationTime"),
+      retentionExpirationTime.map(ret => strToDateTimeOrThrow(ret, "retentionExpirationTime")),
       strToDateTimeOrThrow(timeStorageClassUpdated, "retentionExpirationTime"),
       cacheControl,
+      customTime.map(ct => strToDateTimeOrThrow(ct, "customTime")),
       metadata,
       componentCount,
       kmsKeyName,
       customerEncryption.map(
         ce =>
-          main.scala.akka.stream.alpakka.googlecloud.storage
+          akka.stream.alpakka.googlecloud.storage
             .CustomerEncryption(ce.encryptionAlgorithm, ce.keySha256)
       ),
-      owner.map(o => main.scala.akka.stream.alpakka.googlecloud.storage.Owner(o.entity, o.entityId)),
+      owner.map(o => akka.stream.alpakka.googlecloud.storage.Owner(o.entity, o.entityId)),
       acl.map(
         _.map(
           a =>
-            main.scala.akka.stream.alpakka.googlecloud.storage.ObjectAccessControls(
+            akka.stream.alpakka.googlecloud.storage.ObjectAccessControls(
               a.kind,
               a.id,
               a.selfLink,
@@ -272,7 +275,7 @@ object Formats extends DefaultJsonProtocol {
               a.email,
               a.entityId,
               a.domain,
-              main.scala.akka.stream.alpakka.googlecloud.storage
+              akka.stream.alpakka.googlecloud.storage
                 .ProjectTeam(a.projectTeam.projectNumber, a.projectTeam.team),
               a.etag
             )

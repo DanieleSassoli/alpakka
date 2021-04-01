@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.scaladsl
 
 import akka.Done
 import akka.actor.{ActorSystem, Cancellable}
-import akka.stream.ActorMaterializer
 import akka.stream.alpakka.googlecloud.pubsub.grpc.PubSubSettings
 import akka.stream.alpakka.googlecloud.pubsub.grpc.scaladsl.{GrpcPublisher, PubSubAttributes}
+import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import org.scalatest.OptionValues
 
 //#publish-single
@@ -21,21 +21,23 @@ import com.google.pubsub.v1.pubsub._
 import akka.NotUsed
 import com.google.protobuf.ByteString
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, Inside, Matchers, WordSpec}
+import org.scalatest.{BeforeAndAfterAll, Inside}
 
 import scala.concurrent.duration._
 import scala.concurrent.Future
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 class IntegrationSpec
-    extends WordSpec
+    extends AnyWordSpec
     with Matchers
     with Inside
     with BeforeAndAfterAll
     with ScalaFutures
-    with OptionValues {
+    with OptionValues
+    with LogCapturing {
 
   implicit val system = ActorSystem("IntegrationSpec")
-  implicit val materializer = ActorMaterializer()
 
   implicit val defaultPatience = PatienceConfig(timeout = 15.seconds, interval = 50.millis)
 
@@ -91,8 +93,8 @@ class IntegrationSpec
       published.futureValue should not be empty
     }
 
-    "subscribe" in {
-      //#subscribe
+    "subscribe streaming" in {
+      //#subscribe-stream
       val projectId = "alpakka"
       val subscription = "simpleSubscription"
 
@@ -102,7 +104,38 @@ class IntegrationSpec
 
       val subscriptionSource: Source[ReceivedMessage, Future[Cancellable]] =
         GooglePubSub.subscribe(request, pollInterval = 1.second)
-      //#subscribe
+      //#subscribe-stream
+
+      val first = subscriptionSource.runWith(Sink.head)
+
+      val topic = "simpleTopic"
+      val msg = ByteString.copyFromUtf8("Hello world!")
+
+      val publishMessage: PubsubMessage =
+        PubsubMessage().withData(msg)
+
+      val publishRequest: PublishRequest =
+        PublishRequest()
+          .withTopic(s"projects/$projectId/topics/$topic")
+          .addMessages(publishMessage)
+
+      Source.single(publishRequest).via(GooglePubSub.publish(parallelism = 1)).runWith(Sink.ignore)
+
+      first.futureValue.message.value.data shouldBe msg
+    }
+
+    "subscribe sync" in {
+      //#subscribe-sync
+      val projectId = "alpakka"
+      val subscription = "simpleSubscription"
+
+      val request = PullRequest()
+        .withSubscription(s"projects/$projectId/subscriptions/$subscription")
+        .withMaxMessages(10)
+
+      val subscriptionSource: Source[ReceivedMessage, Future[Cancellable]] =
+        GooglePubSub.subscribePolling(request, pollInterval = 1.second)
+      //#subscribe-sync
 
       val first = subscriptionSource.runWith(Sink.head)
 
@@ -148,6 +181,28 @@ class IntegrationSpec
       //#acknowledge
     }
 
+    "acknowledge flow" in {
+      val projectId = "alpakka"
+      val subscription = "simpleSubscription"
+
+      val request = StreamingPullRequest()
+        .withSubscription(s"projects/$projectId/subscriptions/$subscription")
+        .withStreamAckDeadlineSeconds(10)
+
+      val subscriptionSource: Source[ReceivedMessage, Future[Cancellable]] =
+        GooglePubSub.subscribe(request, pollInterval = 1.second)
+
+      subscriptionSource
+        .map { message =>
+          // do something fun
+          message.ackId
+        }
+        .groupedWithin(10, 1.second)
+        .map(ids => AcknowledgeRequest(ackIds = ids))
+        .via(GooglePubSub.acknowledgeFlow())
+        .to(Sink.ignore)
+    }
+
     "republish" in {
       val msg = "Labas!"
 
@@ -169,7 +224,7 @@ class IntegrationSpec
       val subNoAckResp = GooglePubSub.subscribe(sub, 1.second).runWith(Sink.head)
 
       inside(subNoAckResp.futureValue.message) {
-        case Some(PubsubMessage(data, _, _, _, _)) => data.toStringUtf8 shouldBe msg
+        case Some(PubsubMessage(data, _, _, _, _, _)) => data.toStringUtf8 shouldBe msg
       }
 
       // subscribe and get the republished message, and ack this time
@@ -183,7 +238,7 @@ class IntegrationSpec
         .runWith(Sink.head)
 
       inside(subWithAckResp.futureValue.message) {
-        case Some(PubsubMessage(data, _, _, _, _)) => data.toStringUtf8 shouldBe msg
+        case Some(PubsubMessage(data, _, _, _, _, _)) => data.toStringUtf8 shouldBe msg
       }
 
       // check if the message is not republished again

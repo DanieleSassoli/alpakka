@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
@@ -51,9 +51,7 @@ public class SqsSourceTest extends BaseSqsTest {
                         .messageBody("alpakka-" + i)
                         .build())
             .grouped(10)
-            .runWith(
-                SqsPublishSink.batchedMessageSink(queueUrl, batchSettings, sqsClient),
-                materializer);
+            .runWith(SqsPublishSink.batchedMessageSink(queueUrl, batchSettings, sqsClient), system);
 
     produced.toCompletableFuture().get(2, TimeUnit.SECONDS);
 
@@ -65,7 +63,7 @@ public class SqsSourceTest extends BaseSqsTest {
                     .withCloseOnEmptyReceive(true)
                     .withWaitTime(Duration.ofMillis(10)),
                 sqsClient)
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     // #run
 
     assertEquals(100, messages.toCompletableFuture().get(20, TimeUnit.SECONDS).size());
@@ -122,7 +120,7 @@ public class SqsSourceTest extends BaseSqsTest {
         SqsSource.create(
                 queueUrl, SqsSourceSettings.create().withWaitTimeSeconds(0), customSqsClient)
             .map(Message::body)
-            .runWith(Sink.head(), materializer);
+            .runWith(Sink.head(), system);
 
     assertEquals("alpakka", cs.toCompletableFuture().get(20, TimeUnit.SECONDS));
   }

@@ -1,22 +1,22 @@
 /*
- * Copyright (C) 2016-2019 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package docs.javadsl;
 
 import akka.NotUsed;
 import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
 import akka.stream.alpakka.geode.GeodeSettings;
 import akka.stream.alpakka.geode.RegionSettings;
 import akka.stream.alpakka.geode.javadsl.Geode;
 import akka.stream.alpakka.geode.javadsl.GeodeWithPoolSubscription;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.Source;
 import akka.testkit.javadsl.TestKit;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
+import org.junit.Rule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,11 +24,11 @@ import java.util.Arrays;
 import java.util.Date;
 
 public class GeodeBaseTestCase {
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
 
   protected static final Logger LOGGER = LoggerFactory.getLogger(GeodeFlowTestCase.class);
 
-  private static ActorSystem system;
-  protected static Materializer materializer;
+  protected static ActorSystem system;
   private String geodeDockerHostname = "localhost";
 
   {
@@ -46,7 +46,6 @@ public class GeodeBaseTestCase {
   @BeforeClass
   public static void setup() {
     system = ActorSystem.create();
-    materializer = ActorMaterializer.create(system);
   }
 
   static Source<Person, NotUsed> buildPersonsSource(Integer... ids) {
